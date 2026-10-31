@@ -141,7 +141,7 @@ The MVP is "done" when all of these pass in a live demo with emulators and no in
 ## 7. Working agreements (how I want you to work)
 
 1. **Step 0 — Ask me first (once, briefly):** (a) the submission deadline and how many people are building, (b) whether I have a demo video or camera footage of a forklift aisle or filling line (if not, you will find or generate placeholder footage options for me to supply), and (c) which language(s) beyond English/Hindi I want. Then proceed with sensible defaults if I don't answer.
-2. **Plan before coding:** write `PLAN.md` with milestones, then create/maintain `CLAUDE.md` in the repo root containing: project summary, run commands, conventions, and the hard constraints above. Keep both updated.
+2. **Plan before coding:** write `PLAN.md` with milestones. `AGENTS.md` already exists in the repo root (standing rules); keep it under 12,000 characters and update its run commands and conventions as the project grows. Keep both updated.
 3. **Milestones** (finish and demo each before the next; commit at each):
    - M0 Scaffold: monorepo, emulators, CI-style lint/test scripts, seed script.
    - M1 Data model + security rules + triage function with tests.
