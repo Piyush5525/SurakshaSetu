@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "workspaces": [
     "apps/web",
-    "functions"
+    "functions",
+    "rules-tests"
   ],
   "engines": {
     "node": ">=20"
@@ -13,11 +14,14 @@
     "dev": "concurrently -k -n emu,web -c blue,green \"npm:emulators\" \"npm:dev -w apps/web\"",
     "emulators": "npm run build -w functions && firebase emulators:start --project demo-plant-line3",
     "seed": "tsx scripts/seed/seed.ts",
+    "smoke": "tsx scripts/seed/smoke.ts",
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p scripts/seed --noEmit",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p scripts/seed --noEmit && tsc -p rules-tests --noEmit",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "test:rules": "firebase emulators:exec --only firestore,storage --project demo-plant-line3 \"npm run test:rules -w rules-tests\"",
+    "test:all": "npm test && npm run test:rules"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

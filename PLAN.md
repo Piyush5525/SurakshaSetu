@@ -1,6 +1,6 @@
 # PLAN — Safer Work, Better Work ("Scan · Speak · See")
 
-Status: APPROVED. M0 done. Deadline: **unknown** (placeholder not filled in). Estimates are focused builder-hours for one main builder; others handle docs/pitch in parallel.
+Status: APPROVED. M0 and M1 done. Deadline: **unknown** (placeholder not filled in). Estimates are focused builder-hours for one main builder; others handle docs/pitch in parallel.
 Defaults assumed: English + Hindi, emulators only (no billing), demo footage TBD.
 
 | # | Milestone | Est. | Done when |
@@ -29,6 +29,9 @@ MVP total is about 44h of build time. The written deliverables (risk analysis, i
 - Hindi STT: always store audio; transcribe only if supported and online; else show "not transcribed".
 - No CLAUDE.md. Old brief/context moved to `docs/MASTER_PROMPT.md` and `docs/CONTEXT.md`; user's new AGENTS.md and replacement docs were not in the folder at M0 (pending).
 - M0: Firebase emulators need Java 21+; portable Temurin 21 (GPLv2+CE) installed user-locally at ~/.jdk. Vite pinned to ^5.4 (single copy; vitest 3).
+- M1: schema approved with additions A–F (injuryNow routing, board whitelist + delayed publication, client IDs, breakdown list, HI/Hinglish keywords, snapshot retention). Details in `docs/data-model.md`.
+- M1: `publishDueBoardItems` and `purgeExpiredSnapshots` are callables (staff only); in production they would be scheduled functions. Scheduled triggers need the Pub/Sub emulator, so they are not used in the offline demo.
+- M1: Storage overwrite protection is create-only in the rules but could not be verified in the emulator (see docs/limitations.md).
 - Git repo initialised in M0, commit per milestone.
 
 ## Open items for the user

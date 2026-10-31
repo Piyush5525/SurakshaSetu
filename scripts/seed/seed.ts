@@ -1,13 +1,24 @@
 /**
- * Seeds the Firestore EMULATOR with the fictional "Demo Plant — Line 3".
- * All data is synthetic. Defaults to the local emulator host.
- * boardItems are NOT written here: the Cloud Function (M1) projects them from reports/actions.
- * Severity/ecoTag values are precomputed placeholders until the triage function (M1) exists.
+ * Seeds the Firebase EMULATORS (Firestore + Auth) with the fictional "Demo Plant — Line 3".
+ * All data is synthetic. Uses the real triage, board-projection and receipt code from functions/src,
+ * so seeded documents look exactly like production ones.
  */
 import { initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { Timestamp, getFirestore } from 'firebase-admin/firestore';
+import { projectBoardItem, shouldPublish } from '../../functions/src/board';
+import {
+  DEFAULTS,
+  HAZARD_TYPES,
+  type HazardType,
+  type ReportStatus,
+  type Shift,
+} from '../../functions/src/domain';
+import { receiptCode } from '../../functions/src/receipt';
+import { triageReport } from '../../functions/src/triage/triage';
 
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
+process.env.FIREBASE_AUTH_EMULATOR_HOST ??= '127.0.0.1:9099';
 const app = initializeApp({ projectId: 'demo-plant-line3' });
 const db = getFirestore(app);
 
@@ -15,6 +26,8 @@ const db = getFirestore(app);
 let s = 42;
 const rnd = () => (s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296;
 const pick = <T>(a: readonly T[]): T => a[Math.floor(rnd() * a.length)] as T;
+const ID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-';
+const clientId = () => Array.from({ length: 20 }, () => pick([...ID_CHARS])).join('');
 
 const locations = [
   {
@@ -66,20 +79,46 @@ const locations = [
     floorPlan: { x: 40, y: 210, w: 200, h: 80 },
   },
 ].map((l) => ({ ...l, assemblyPoint: 'Assembly point A (fictional)', active: true }));
+const locById = new Map(locations.map((l) => [l.id, l]));
 
-// hazardType -> base severity and eco-tag candidates (placeholder until M1 triage).
-const hazards = [
-  { type: 'pinch_jam', sev: 4, eco: ['none'] },
-  { type: 'forklift', sev: 3, eco: ['none'] },
-  { type: 'chemical_spill', sev: 3, eco: ['spill', 'material_waste'] },
-  { type: 'slip_trip', sev: 2, eco: ['spill', 'none'] },
-  { type: 'manual_handling', sev: 2, eco: ['none'] },
-  { type: 'electrical_lockout', sev: 4, eco: ['idle_machine', 'none'] },
-  { type: 'other', sev: 1, eco: ['air_leak', 'steam_leak', 'none'] },
-] as const;
-const shifts = ['A', 'B', 'C'] as const;
+// Synthetic transcripts in English, Hindi and Hinglish; many reports have none.
+const transcripts: Partial<Record<HazardType, string[]>> = {
+  pinch_jam: [
+    'label jam, hand almost caught in the roller',
+    'हाथ फंस गया था बेल्ट में',
+    'jam clear karte time haath fas gaya',
+    'conveyor jam again at the end of shift',
+  ],
+  forklift: [
+    'forklift came round the corner too fast',
+    'forklift se takra gaya tha almost',
+    'फोर्कलिफ्ट बहुत पास से निकली',
+  ],
+  chemical_spill: ['oil spilled near the pump', 'tel gira hua hai floor par'],
+  slip_trip: ['wet floor by the capper', 'cable across the walkway'],
+  other: [
+    'loud hissing from the air hose',
+    'steam from the valve',
+    'machine left on, running empty',
+    'lots of scrap bottles by the labeller',
+    'हवा लीक हो रही है',
+  ],
+};
+
+const shifts: readonly Shift[] = ['A', 'B', 'C'];
 const DAY = 86_400_000;
 const now = Date.now();
+const nowDate = new Date(now);
+const tz = DEFAULTS.plantTimeZone;
+
+function weekKey(d: Date): string {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dayNum = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((t.getTime() - yearStart.getTime()) / DAY + 1) / 7);
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
 
 async function clear(col: string) {
   const snap = await db.collection(col).get();
@@ -88,10 +127,29 @@ async function clear(col: string) {
   await batch.commit();
 }
 
+async function seedStaff() {
+  const auth = getAuth(app);
+  const staff = [
+    { email: 'supervisor@demo.local', role: 'supervisor' },
+    { email: 'ehs@demo.local', role: 'ehs_admin' },
+  ];
+  for (const u of staff) {
+    const existing = await auth.getUserByEmail(u.email).catch(() => null);
+    if (existing) await auth.deleteUser(existing.uid);
+    const created = await auth.createUser({
+      email: u.email,
+      password: 'demo1234',
+      emailVerified: true,
+    });
+    await auth.setCustomUserClaims(created.uid, { role: u.role });
+  }
+}
+
 async function main() {
   for (const c of [
     'locations',
     'reports',
+    'boardItems',
     'events',
     'actions',
     'assumptions',
@@ -100,6 +158,8 @@ async function main() {
   ]) {
     await clear(c);
   }
+  await seedStaff();
+
   const batch = db.batch();
   for (const { id, ...l } of locations) {
     batch.set(db.collection('locations').doc(id), {
@@ -109,73 +169,125 @@ async function main() {
     });
   }
 
-  // Filler, case packer and forklift lane are hotspots; volume grows over 8 weeks (reporting culture improving).
   let nReports = 0;
+  let nBoard = 0;
   for (let w = 7; w >= 0; w--) {
+    // Volume grows over 8 weeks: a reporting culture improving (synthetic).
     const count = 5 + (7 - w) + Math.floor(rnd() * 3);
     for (let i = 0; i < count; i++) {
       const hot = rnd() < 0.5;
-      const loc = hot
+      const locationId = hot
         ? pick(['filler', 'case-packer', 'forklift-lane'])
         : pick(locations.map((l) => l.id));
-      const h = loc === 'forklift-lane' ? hazards[1] : hot ? hazards[0] : pick(hazards);
-      const t = Timestamp.fromMillis(
-        now - (w * 7 + Math.floor(rnd() * 7)) * DAY - Math.floor(rnd() * DAY),
+      const hazardType: HazardType =
+        locationId === 'forklift-lane' ? 'forklift' : hot ? 'pinch_jam' : pick(HAZARD_TYPES);
+      const loc = locById.get(locationId)!;
+      const createdMs = now - (w * 7 + Math.floor(rnd() * 7)) * DAY - Math.floor(rnd() * DAY);
+      const createdAt = new Date(createdMs);
+      const id = clientId();
+      nReports++;
+
+      const texts = transcripts[hazardType];
+      const transcript = texts && rnd() < 0.6 ? pick(texts) : '';
+      const seriousHarmFlag =
+        (hazardType === 'pinch_jam' || hazardType === 'forklift') && rnd() < 0.25;
+      const injuryNow = nReports === 3; // one synthetic example of the emergency route
+      const t = triageReport(
+        { hazardType, seriousHarmFlag, injuryNow, transcript },
+        { name: loc.name, riskWeight: loc.riskWeight },
       );
-      const closed = w > 1 || rnd() < 0.4;
-      const id = `seed-r${++nReports}`;
-      const sev = h.sev;
+
+      const old = w > 1;
+      const closed = old || rnd() < 0.4;
+      const status: ReportStatus = closed ? 'fixed' : pick(['received', 'being_fixed'] as const);
+      const shift = pick(shifts);
+      const createdTs = Timestamp.fromMillis(createdMs);
+
       batch.set(db.collection('reports').doc(id), {
-        receiptCode: `SEED-${String(nReports).padStart(3, '0')}`,
-        locationId: loc,
-        shift: pick(shifts),
-        hazardType: h.type,
-        seriousHarmFlag: sev >= 4 && rnd() < 0.5,
-        transcript: '',
-        transcriptStatus: 'not_transcribed',
+        locationId,
+        hazardType,
+        seriousHarmFlag,
+        injuryNow,
+        transcript,
+        transcriptStatus: transcript ? 'transcribed' : 'no_audio',
         audioPath: null,
         photoPath: null,
-        lang: rnd() < 0.5 ? 'hi' : 'en',
+        lang: /[ऀ-ॿ]/.test(transcript) ? 'hi' : 'en',
+        shift,
+        status,
+        createdAt: createdTs,
+        receiptCode: receiptCode(id),
         source: 'worker',
-        severity: sev,
-        severityReason: 'SEED DATA: placeholder value, real triage runs in M1',
-        ecoTag: pick(h.eco),
-        status: closed ? 'fixed' : pick(['received', 'being_fixed']),
-        actionId: sev >= 3 ? `seed-a${nReports}` : null,
-        triagedBy: 'seed',
-        createdAt: t,
-        updatedAt: t,
+        severity: t.severity,
+        severityRaw: t.severityRaw,
+        severityReason: t.severityReason,
+        severityBreakdown: t.severityBreakdown,
+        ecoTag: t.ecoTag,
+        ecoReason: t.ecoReason,
+        route: t.route,
+        actionId: t.action ? id : null,
+        triagedBy: 'rules',
+        updatedAt: createdTs,
       });
-      if (sev >= 3) {
-        const closedAt = Timestamp.fromMillis(
-          t.toMillis() + (6 + Math.floor(rnd() * 90)) * 3_600_000,
-        );
-        batch.set(db.collection('actions').doc(`seed-a${nReports}`), {
+
+      let actionForBoard = null;
+      if (t.action) {
+        const actionStatus =
+          status === 'fixed' ? 'closed' : status === 'being_fixed' ? 'in_progress' : 'open';
+        const closedAt =
+          status === 'fixed'
+            ? new Date(createdMs + (6 + Math.floor(rnd() * 90)) * 3_600_000)
+            : null;
+        const publicFixText = status === 'received' ? '' : 'Seed example fix (fictional)';
+        const featured = status === 'fixed' && rnd() < 0.1;
+        batch.set(db.collection('actions').doc(id), {
           reportId: id,
-          locationId: loc,
-          title: `Fix: ${h.type.replace('_', ' ')} at ${loc}`,
-          owner: 'Maintenance team',
-          dueDate: Timestamp.fromMillis(t.toMillis() + 7 * DAY),
-          status: closed ? 'closed' : 'open',
-          fixDescription: closed ? 'Seed example fix (fictional)' : '',
-          visibleFix: closed && rnd() < 0.8,
-          closedAt: closed ? closedAt : null,
+          locationId,
+          title: t.action.title,
+          owner: t.action.owner,
+          dueDate: Timestamp.fromMillis(createdMs + t.action.dueInDays * DAY),
+          status: actionStatus,
           controlLevel: pick(['engineer', 'admin', 'eliminate'] as const),
-          createdAt: t,
-          updatedAt: t,
+          internalNotes: '',
+          publicFixText,
+          visibleFix: status === 'fixed' && rnd() < 0.8,
+          featured,
+          closedAt: closedAt ? Timestamp.fromDate(closedAt) : null,
+          createdAt: createdTs,
+          updatedAt: createdTs,
         });
+        actionForBoard = { publicFixText, featured, closedAt };
       }
-      if (rnd() < 0.5) {
-        batch.set(db.collection('feedback').doc(`seed-f${nReports}`), {
-          reportId: id,
-          score: 3 + Math.floor(rnd() * 3),
-          createdAt: t,
-        });
+
+      if (shouldPublish(status, createdAt, nowDate)) {
+        batch.set(
+          db.collection('boardItems').doc(id),
+          projectBoardItem(id, { hazardType, status, shift, createdAt }, loc, actionForBoard, tz),
+        );
+        nBoard++;
       }
     }
   }
 
-  const ev = [
+  // Feedback: 8 anonymous entries per location x shift group (>= 5 minimum), spread over the 8 weeks.
+  let nFeedback = 0;
+  for (const l of locations) {
+    for (const shift of shifts) {
+      for (let i = 0; i < 8; i++) {
+        const when = new Date(now - (i * 7 + Math.floor(rnd() * 7)) * DAY);
+        batch.set(db.collection('feedback').doc(), {
+          score: 3 + Math.floor(rnd() * 3),
+          locationId: l.id,
+          shift,
+          weekKey: weekKey(when),
+          createdAt: Timestamp.fromDate(when),
+        });
+        nFeedback++;
+      }
+    }
+  }
+
+  const events = [
     {
       rule: 'forklift_person_gap',
       loc: 'forklift-lane',
@@ -197,26 +309,28 @@ async function main() {
       measure: 52,
       status: 'confirmed',
     },
+    // Dismissed events keep only the verdict: no snapshot, measure or confidence.
     {
       rule: 'hand_in_danger_zone',
       loc: 'case-packer',
       zoneId: 'case-packer-danger-1',
-      measure: 3.1,
+      measure: null,
       status: 'dismissed',
     },
   ];
-  ev.forEach((e, i) => {
+  events.forEach((e, i) => {
     const t = Timestamp.fromMillis(now - i * DAY);
     const reviewed = e.status !== 'pending';
+    const dismissed = e.status === 'dismissed';
     batch.set(db.collection('events').doc(`seed-e${i + 1}`), {
       rule: e.rule,
       zoneId: e.zoneId,
       locationId: e.loc,
       shift: pick(shifts),
       detectedAt: t,
-      confidence: 0.8 + i * 0.03,
+      confidence: dismissed ? null : 0.8 + i * 0.03,
       measure: e.measure,
-      snapshotPath: null,
+      snapshotPath: null, // real pixelated snapshots arrive with the vision service (M5)
       status: e.status,
       reviewedByRole: reviewed ? 'supervisor' : null,
       reviewedAt: reviewed ? t : null,
@@ -227,31 +341,43 @@ async function main() {
     });
   });
 
-  // Every number here is an ASSUMPTION (see docs/eco-impact.md in M6); none is a measurement.
+  // Every number here is an ASSUMPTION; none is a measurement.
   const assumptions = [
+    {
+      key: 'board_publish_delay_hours',
+      value: DEFAULTS.boardPublishDelayHours,
+      unit: 'hours',
+      label: 'Hold unreviewed reports off the public board for this long',
+    },
+    {
+      key: 'snapshot_retention_days',
+      value: DEFAULTS.snapshotRetentionDays,
+      unit: 'days',
+      label: 'Delete pixelated camera snapshots after this many days',
+    },
     {
       key: 'air_leak_kwh_per_event',
       value: 50,
       unit: 'kWh',
-      label: 'Energy saved per compressed-air leak fixed',
+      label: 'Energy saved per compressed-air leak fixed (estimate)',
     },
     {
       key: 'steam_leak_kwh_per_event',
       value: 80,
       unit: 'kWh',
-      label: 'Energy saved per steam leak fixed',
+      label: 'Energy saved per steam leak fixed (estimate)',
     },
     {
       key: 'spill_kg_per_event',
       value: 5,
       unit: 'kg',
-      label: 'Material saved per spill prevented',
+      label: 'Material saved per spill prevented (estimate)',
     },
     {
       key: 'idle_machine_kwh_per_event',
       value: 20,
       unit: 'kWh',
-      label: 'Energy saved per idle-machine episode',
+      label: 'Energy saved per idle-machine episode (estimate)',
     },
     {
       key: 'workers_on_line',
@@ -266,7 +392,10 @@ async function main() {
 
   await batch.commit();
   console.log(
-    `Seeded ${locations.length} locations, ${nReports} reports, ${ev.length} events, ${assumptions.length} assumptions (emulator, synthetic).`,
+    `Seeded ${locations.length} locations, ${nReports} reports (${nBoard} published to the board), ${nFeedback} feedback, ${events.length} events, ${assumptions.length} assumptions, 2 staff users (emulator, synthetic).`,
+  );
+  console.log(
+    'Staff logins (emulator only): supervisor@demo.local / ehs@demo.local, password demo1234',
   );
 }
 

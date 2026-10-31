@@ -13,6 +13,14 @@ npm install
 npm run dev      # Firebase emulators (UI http://localhost:4000) + web app http://localhost:5173
 npm run seed     # in a second terminal, once emulators are up
 ```
+Staff logins (Auth emulator only, synthetic): `supervisor@demo.local` / `ehs@demo.local`, password `demo1234`.
+
+Verify M1 (Java 21+ on PATH):
+```
+npm test            # unit tests: triage, board projection, retention, pulse (41 tests)
+npm run test:rules  # starts Firestore+Storage emulators and runs security-rules tests
+npm run smoke       # with `npm run dev` + `npm run seed` running: end-to-end trigger check
+```
 Other scripts: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run format`.
 
 ## Notes

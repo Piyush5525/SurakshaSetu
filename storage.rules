@@ -1,7 +1,28 @@
 rules_version = '2';
-// M0 placeholder: deny everything. Real rules arrive in M1.
+// Worker uploads (audio/photo) are create-only; staff read. Event snapshots are written by the vision service.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} { allow read, write: if false; }
+    function isStaff() {
+      return request.auth != null && request.auth.token.get('role', '') in ['supervisor', 'ehs_admin'];
+    }
+
+    match /reports/{reportId}/{file} {
+      allow create: if resource == null
+        && request.auth != null
+        && reportId.matches('^[A-Za-z0-9_-]{20,40}$')
+        && request.resource.size < 10 * 1024 * 1024
+        && (request.resource.contentType.matches('audio/.*') || request.resource.contentType.matches('image/.*'));
+      allow read: if isStaff();
+      allow update, delete: if false;
+    }
+
+    match /events/{file} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
   }
 }

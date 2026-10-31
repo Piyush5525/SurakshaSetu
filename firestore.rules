@@ -1,7 +1,113 @@
 rules_version = '2';
-// M0 placeholder: deny everything. Real role-based rules + tests arrive in M1.
+// Roles: anonymous sign-in = worker (no claim); staff = custom claim role in ['supervisor','ehs_admin'].
+// Unauthenticated visitors may read ONLY boardItems. See docs/data-model.md.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} { allow read, write: if false; }
+
+    function signedIn() { return request.auth != null; }
+    function role() { return signedIn() ? request.auth.token.get('role', '') : ''; }
+    function isStaff() { return role() in ['supervisor', 'ehs_admin']; }
+    function isAdmin() { return role() == 'ehs_admin'; }
+    function changedOnly(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+
+    // Public "You said, we did" board: written only by Cloud Functions (admin SDK bypasses rules).
+    match /boardItems/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /locations/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Reports: workers create (client-generated ID), cannot read. Triage fields are function-only.
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && reportId.matches('^[A-Za-z0-9_-]{20,40}$')
+        && validReport(request.resource.data);
+      allow read: if isStaff();
+      allow update: if isStaff()
+        && changedOnly(['status', 'updatedAt'])
+        && request.resource.data.status in ['received', 'being_fixed', 'fixed', 'dismissed'];
+      allow delete: if false;
+    }
+
+    function validReport(d) {
+      return d.keys().hasOnly(['locationId', 'hazardType', 'seriousHarmFlag', 'injuryNow', 'transcript',
+                               'transcriptStatus', 'audioPath', 'photoPath', 'lang', 'shift',
+                               'reporterName', 'status', 'createdAt'])
+        && d.keys().hasAll(['locationId', 'hazardType', 'seriousHarmFlag', 'injuryNow', 'transcript',
+                            'transcriptStatus', 'lang', 'shift', 'status', 'createdAt'])
+        && d.locationId is string && d.locationId.size() > 0 && d.locationId.size() <= 60
+        && d.hazardType in ['pinch_jam', 'forklift', 'chemical_spill', 'slip_trip', 'manual_handling',
+                            'electrical_lockout', 'other']
+        && d.seriousHarmFlag is bool
+        && d.injuryNow is bool
+        && d.transcript is string && d.transcript.size() <= 1000
+        && d.transcriptStatus in ['transcribed', 'not_transcribed', 'no_audio']
+        && (!('audioPath' in d) || d.audioPath == null || (d.audioPath is string && d.audioPath.size() <= 200))
+        && (!('photoPath' in d) || d.photoPath == null || (d.photoPath is string && d.photoPath.size() <= 200))
+        && d.lang in ['en', 'hi']
+        && d.shift in ['A', 'B', 'C']
+        && (!('reporterName' in d) || d.reporterName == null || (d.reporterName is string && d.reporterName.size() <= 60))
+        && d.status == 'received'
+        && d.createdAt is timestamp && d.createdAt <= request.time;
+    }
+
+    // Actions are created by the triage function; staff may edit progress fields only.
+    match /actions/{id} {
+      allow read: if isStaff();
+      allow update: if isStaff()
+        && changedOnly(['status', 'owner', 'dueDate', 'controlLevel', 'internalNotes', 'publicFixText',
+                        'visibleFix', 'featured', 'closedAt', 'updatedAt']);
+      allow create, delete: if false;
+    }
+
+    // Camera events: created by the vision service (admin SDK). Staff may only confirm or dismiss.
+    match /events/{id} {
+      allow read: if isStaff();
+      allow update: if isStaff()
+        && resource.data.status == 'pending'
+        && changedOnly(['status', 'reviewedByRole', 'reviewedAt', 'updatedAt'])
+        && request.resource.data.status in ['confirmed', 'dismissed'];
+      allow create, delete: if false;
+    }
+
+    // Anonymous pulse: no reportId, no uid. Only EHS admins read, and only aggregates are displayed.
+    match /feedback/{id} {
+      allow create: if signedIn() && validFeedback(request.resource.data);
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    function validFeedback(d) {
+      return d.keys().hasOnly(['score', 'locationId', 'shift', 'weekKey', 'createdAt'])
+        && d.keys().hasAll(['score', 'locationId', 'shift', 'weekKey', 'createdAt'])
+        && d.score is int && d.score >= 1 && d.score <= 5
+        && d.locationId is string && d.locationId.size() <= 60
+        && d.shift in ['A', 'B', 'C']
+        && d.weekKey is string && d.weekKey.matches('^[0-9]{4}-W[0-9]{2}$')
+        && d.createdAt is timestamp && d.createdAt <= request.time;
+    }
+
+    match /assumptions/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    match /kpiSnapshots/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    match /escalations/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
