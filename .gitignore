@@ -1,0 +1,16 @@
+node_modules/
+dist/
+lib/
+.env
+.env.local
+*.log
+.firebase/
+.emulator-data/
+firebase-debug.log*
+firestore-debug.log
+ui-debug.log
+__pycache__/
+.venv/
+.ruff_cache/
+demo-assets/*.mp4
+*.tsbuildinfo
