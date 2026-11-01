@@ -25,7 +25,6 @@ export function Shell({ children, back }: { children: ReactNode; back?: string }
           <button
             onClick={toggleLanguage}
             className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-bold"
-            aria-label="Change language"
           >
             {t('common.language')}
           </button>

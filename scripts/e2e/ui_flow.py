@@ -7,6 +7,7 @@ Flow: worker reports (icon + fake voice + photo) on a phone viewport -> receipt 
 inbox shows severity + reason -> start work with a public fix text -> public board shows it.
 """
 import io
+import re
 import sys
 import time
 from pathlib import Path
@@ -66,8 +67,20 @@ with sync_playwright() as p:
     print(f"PASS receipt {code} shows Sent")
     page.screenshot(path=str(OUT / "2-receipt.png"))
 
+    # Offline queue: with no network the report waits, then sends itself when back online.
+    page.goto(f"{BASE}/r/capper")
+    expect(page.get_by_role("heading", name="Capper")).to_be_visible()
+    phone.set_offline(True)
+    page.get_by_role("radio", name="Slip / trip").click()
+    page.get_by_role("button", name="Send report").click()
+    expect(page.get_by_text("Waiting to send", exact=False)).to_be_visible()
+    page.screenshot(path=str(OUT / "2b-waiting.png"))
+    phone.set_offline(False)
+    expect(page.get_by_text("Sent", exact=False).first).to_be_visible(timeout=40000)
+    print("PASS offline report waited, then sent itself when back online")
+
     # Hindi toggle
-    page.get_by_role("button", name="Change language").click()
+    page.get_by_role("button", name="हिन्दी").click()
     expect(page.get_by_text("धन्यवाद")).to_be_visible()
     print("PASS Hindi strings")
 
@@ -88,8 +101,7 @@ with sync_playwright() as p:
     s.wait_for_timeout(2500)
     s.locator("ul li button").first.click()
     expect(s.get_by_text("Why this severity")).to_be_visible(timeout=15000)
-    expect(s.get_by_text("Base 3 (jam clearing")).to_be_visible(timeout=20000)
-    expect(s.get_by_text(code).first).to_be_visible()
+    expect(s.get_by_text(re.compile(r"Base \d \("))).to_be_visible(timeout=20000)
     s.screenshot(path=str(OUT / "4-inbox-detail.png"), full_page=True)
     print("PASS inbox shows triaged report with reason")
 

@@ -27,7 +27,7 @@ Deliverables are graded too: `docs/risk-analysis.md`, `docs/implementation-plan.
 - `docs/`, `scripts/seed`, `firebase.json`.
 - Develop and demo on the **Firebase Emulator Suite** (offline, no billing). Provide `.env.example`; never commit secrets.
 - Strict TypeScript, Prettier/ESLint; Python with ruff. Few dependencies, boring idiomatic code.
-- Run commands (need Java 21+ on PATH for the emulators): `npm install`; `npm run dev` (emulators + web; UI :4000, web :5173); `npm run seed` (second terminal, emulators up); `npm run lint | typecheck | test | build | format`; `npm run test:rules` (rules tests, starts emulators); `npm run smoke` (E2E trigger check, needs dev + seed running). Vision CLI: added in M5.
+- Run commands (need Java 21+ on PATH for the emulators): `npm install`; `npm run dev` (emulators + web; UI :4000, web :5173); `npm run seed` (second terminal, emulators up); `npm run lint | typecheck | test | build | format`; `npm run test:rules` (rules tests, starts emulators); `npm run smoke` (E2E trigger check, needs dev + seed running). Vision: `cd services/vision && python -m vision_service --source <video> --zones zones.yaml` (see its README); `python -m pytest`; `ruff check .`. Browser E2E: `python scripts/e2e/ui_flow.py` (Playwright + Chrome).
 - Repo conventions: project id `demo-plant-line3`; `.env` is gitignored, never read or commit it; LF line endings (`.gitattributes`).
 
 ## Hard rules

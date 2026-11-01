@@ -1,6 +1,6 @@
 # PLAN — Safer Work, Better Work ("Scan · Speak · See")
 
-Status: APPROVED. M0 and M1 done. Deadline: **unknown** (placeholder not filled in). Estimates are focused builder-hours for one main builder; others handle docs/pitch in parallel.
+Status: M0–M7 built (see decisions). Remaining risk: no real footage, no measured accuracy. Deadline: **unknown** (placeholder not filled in). Estimates are focused builder-hours for one main builder; others handle docs/pitch in parallel.
 Defaults assumed: English + Hindi, emulators only (no billing), demo footage TBD.
 
 | # | Milestone | Est. | Done when |
@@ -34,5 +34,11 @@ MVP total is about 44h of build time. The written deliverables (risk analysis, i
 - M1: Storage overwrite protection is create-only in the rules but could not be verified in the emulator (see docs/limitations.md).
 - Git repo initialised in M0, commit per milestone.
 
+- M2–M4: worker PWA, admin, board built together. Offline queue (IndexedDB, retries while open; no Background Sync API) shipped in M2 since it shaped submission. QR stickers print via the browser (Save as PDF).
+- M5: vision service; `.env` has `GCLOUD_PROJECT=demo-safer-work`, which does not match the repo's emulator project `demo-plant-line3`, so the service ignores it and prints a note. Forklift = COCO `truck` stand-in; the HF forklift model declares no licence and was not downloaded. Test clip is a plumbing test only.
+- M5: driver exclusion requires feet well above the vehicle's bottom edge, otherwise a pedestrian standing in front of a forklift would be mistaken for the driver (found while testing).
+- M7: simulated escalation router + dispatcher screen; only `injuryNow` starts the emergency chain, high-potential near misses go to the supervisor only. Phase 2 vision rules (forklift-only lane, idle machine) behind `--p2-rules`. PPE detection not built (cut order). Optional LLM triage not built (no key, rules path is the explainable one).
+- M6: docs written against the real implementation; Lighthouse mobile run: accessibility 100, best practices 100.
+
 ## Open items for the user
-Deadline; team size and who owns docs/pitch; demo footage; organiser confirmation that our discipline is eligible (CONTEXT §1); judging format.
+Deadline; team size and who owns docs/pitch; **real demo footage** (forklift aisle and filling line) and permission to try a forklift model with a clear licence; whether to align `.env` GCLOUD_PROJECT with `demo-plant-line3`; organiser confirmation that our discipline is eligible (CONTEXT §1); judging format.
