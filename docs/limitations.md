@@ -32,7 +32,7 @@ An honest list of what is simulated, assumed or unvalidated. If a claim is not h
 - **Offline queue:** reports are queued in IndexedDB and retried while the app is open or when the browser comes back online. We do **not** use the Background Sync API, so a report queued on a phone that is then closed is sent next time the app is opened. A retry after a lost acknowledgement is treated as "already sent" on a permission-denied reply, which could in rare cases hide a real denial.
 - **Storage rules** are create-only for worker uploads, but the Storage emulator allowed a second upload to the same path in our test, so overwrite protection is **not verified** (one test is left as a `todo`).
 - **Voice:** audio is always stored. Transcription uses the browser Web Speech API only when supported **and** online; Hindi support varies by browser and usually needs a connection. Otherwise the UI shows "Not transcribed (audio saved)". Safari/iOS support differs; not tested on devices.
-- **QR stickers** are printed via the browser (Print → Save as PDF), not generated server-side. Phones need to reach the dashboard host on the network (set the base URL on the Stickers tab).
+- **QR stickers** are printed via the browser (Print → Save as PDF), not generated server-side. Phones need to reach the dashboard host on the network (the sticker app picks the Wi-Fi address; change it on its page if needed).
 - **Accessibility/PWA:** manual checks only (high contrast, large targets, one-handed layout). A Lighthouse run is documented in the README if performed; no certification is claimed.
 - Not built, by design: Bluetooth mesh relay (roadmap only, `docs/roadmap-mesh.md`).
 - Not tested on a real mid-range Android phone on a plant network.
@@ -40,3 +40,6 @@ An honest list of what is simulated, assumed or unvalidated. If a claim is not h
 ## Eligibility and scope
 The competition lists mechanical, chemical, electrical, food-tech, metallurgy and production disciplines. Our team is software and communications heavy; confirm eligibility with the organisers
 and consider a mechanical/production teammate to validate the risk analysis (CONTEXT §1). No judging weights or dates were found publicly; we invent none.
+
+## Auto-report mode (camera)
+`--auto-report` (`npm run cv:webcam`, `npm run cv:demo`) skips the human confirm step on request of the team: each detection becomes a triaged report at once, marked `reviewedByRole: auto`. This departs from the default (every auto-detected event needs human confirm/dismiss) and **will produce false alarms** because no accuracy has been measured. Use review mode (`npm run cv:webcam:review`) for anything beyond a demo.

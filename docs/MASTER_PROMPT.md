@@ -74,7 +74,7 @@ Legend: **MVP** = build first and make it excellent. **P2** = Phase 2, build if 
 ### D. "You said, we did" board (public route `/board`)
 - Large-screen friendly. Shows recent reports (anonymised), status (received → being fixed → fixed), what was changed, and a monthly "top fix" highlight. This is the culture mechanism, so make it good-looking and readable from 3 metres away.
 
-### E. AI camera service (Python, `services/vision/`)
+### E. AI camera service (Python, `3-auto-cv/`)
 - Python 3.11, `ultralytics` (YOLOv8n and `yolov8n-pose`), `supervision` (ByteTrack, PolygonZone), `firebase-admin`, OpenCV. **No training**: use pretrained weights only.
   - People: stock COCO `yolov8n.pt` (class `person`).
   - Hands: `yolov8n-pose.pt` wrist keypoints (no custom hand model).
@@ -114,7 +114,7 @@ Create and keep updated as features land:
 
 ## 4. Tech stack and repo layout
 
-- Monorepo. `apps/web` (React + Vite + TypeScript, PWA, Tailwind, `react-i18next`), `functions/` (Firebase Cloud Functions, TypeScript), `services/vision/` (Python), `docs/`, `scripts/seed`, `firebase.json` and emulator config.
+- Monorepo. `2-user-report-site` (React + Vite + TypeScript, PWA, Tailwind, `react-i18next`), `functions/` (Firebase Cloud Functions, TypeScript), `3-auto-cv/` (Python), `docs/`, `scripts/seed`, `firebase.json` and emulator config.
 - I know React, Firebase and Python well; keep the code idiomatic and boring. Prefer few dependencies. Strict TypeScript. Format with Prettier/ESLint; Python with `ruff`.
 - A single `npm run dev` (or `make dev`) should start emulators + web app. Provide `npm run seed` to load a **fictional "Demo Plant — Line 3"** with locations (Filler, Capper, Labeller, Case packer, Forklift lane, Raw-material store), sample reports across 8 weeks, and sample camera events.
 - **Branding:** use a generic fictional plant name. Do not use L'Oréal logos or marks, and do not imply endorsement.

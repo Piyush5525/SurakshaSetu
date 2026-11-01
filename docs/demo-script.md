@@ -1,6 +1,6 @@
 # Demo script (5 minutes)
 
-**Setup (before the audience):** Java 21 on PATH → `npm run dev`, then in a second terminal `npm run seed`. Optionally run the vision plumbing test once (see `services/vision/README.md`)
+**Setup (before the audience):** Java 21 on PATH → `npm run dev`, then in a second terminal `npm run seed`. Optionally run the vision plumbing test once (see `3-auto-cv/README.md`)
 so there are camera events with snapshots. Open three windows: phone-size browser on `http://localhost:5173/r/filler`, the dashboard `/admin` signed in as `supervisor@demo.local` (password `demo1234`),
 and `/board` full-screen on a second screen. Everything runs offline on the emulators; data is synthetic and the plant is fictional.
 
@@ -18,9 +18,9 @@ and `/board` full-screen on a second screen. Everything runs offline on the emul
 
 ## If something fails
 - Emulators not ready: wait for "All emulators ready", re-run `npm run seed`.
-- No camera events: run the vision service on the plumbing clip (`services/vision/README.md`) or on your own footage.
+- No camera events: run the vision service on the plumbing clip (`3-auto-cv/README.md`) or on your own footage.
 - A report does not appear on the board right away: by design it appears when work starts (or after the delay). Move its action to *in progress*.
-- Phone cannot reach the laptop: use the laptop's LAN address and set it as the base URL on the QR stickers tab.
+- Phone cannot reach the laptop: use the laptop's LAN address and set it as the address on the sticker app page (port 5174).
 
 ## Verification before presenting
-`npm test`, `npm run test:rules`, `npm run smoke` (emulators + seed running), `python scripts/e2e/ui_flow.py` (Playwright + Chrome), `python -m pytest` in `services/vision`.
+`npm test`, `npm run test:rules`, `npm run smoke` (emulators + seed running), `python scripts/e2e/ui_flow.py` (Playwright + Chrome), `python -m pytest` in `3-auto-cv`.

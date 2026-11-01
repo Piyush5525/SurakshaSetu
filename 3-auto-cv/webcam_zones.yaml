@@ -1,0 +1,8 @@
+# Live laptop-webcam demo (640x480 frame). The red box is a pretend machine danger zone at the
+# bottom-right of the picture: put your hand in it for ~2 s while the (simulated) machine is "running".
+# Edit with: python -m vision_service.draw_zones --source 0
+zones:
+  - id: webcam-danger-1
+    type: machine_danger
+    location_id: filler
+    polygon: [[360, 200], [620, 200], [620, 460], [360, 460]]

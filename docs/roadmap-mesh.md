@@ -2,7 +2,7 @@
 
 **Status: not implemented, and deliberately so.**
 
-The real feature for poor connectivity is the **offline queue** that is already built (IndexedDB queue, "waiting to send" status, automatic retry when the app is open or the browser is back online; see `apps/web/src/lib/queue.ts`).
+The real feature for poor connectivity is the **offline queue** that is already built (IndexedDB queue, "waiting to send" status, automatic retry when the app is open or the browser is back online; see `2-user-report-site/src/lib/queue.ts`).
 
 A phone-to-phone Bluetooth **mesh** (relaying a report from a phone without signal via nearby phones) is a future idea. General knowledge, to **verify before promising anything**:
 - A browser-based PWA cannot run a background mesh: Web Bluetooth is limited, needs user gestures and pairing, and is not supported in iOS Safari.

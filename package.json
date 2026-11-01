@@ -3,7 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "workspaces": [
-    "apps/web",
+    "1-sticker-app",
+    "2-user-report-site",
     "functions",
     "rules-tests"
   ],
@@ -11,7 +12,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "concurrently -k -n emu,web -c blue,green \"npm:emulators\" \"npm:dev -w apps/web\"",
+    "dev": "node scripts/dev.mjs",
     "emulators": "npm run build -w functions && firebase emulators:start --project demo-plant-line3",
     "seed": "tsx scripts/seed/seed.ts",
     "smoke": "tsx scripts/seed/smoke.ts",
@@ -21,7 +22,12 @@
     "format": "prettier --write .",
     "test": "npm run test --workspaces --if-present",
     "test:rules": "firebase emulators:exec --only firestore,storage --project demo-plant-line3 \"npm run test:rules -w rules-tests\"",
-    "test:all": "npm test && npm run test:rules"
+    "test:all": "npm test && npm run test:rules",
+    "dev:sticker": "npm run dev -w 1-sticker-app",
+    "dev:site": "npm run dev -w 2-user-report-site",
+    "cv:demo": "cd 3-auto-cv && python -m vision_service --source ../demo-assets/plumbing_test.mp4 --zones plumbing_zones.yaml --vehicle-classes bus --gap-px 100 --sink firestore --auto-report",
+    "cv:webcam": "cd 3-auto-cv && python -m vision_service --source 0 --zones webcam_zones.yaml --sink firestore --auto-report",
+    "cv:webcam:review": "cd 3-auto-cv && python -m vision_service --source 0 --zones webcam_zones.yaml --sink firestore"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

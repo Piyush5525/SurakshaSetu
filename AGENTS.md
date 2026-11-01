@@ -21,13 +21,13 @@ Hero risk: clearing jams and changeovers on filling/packaging lines (our assumpt
 Deliverables are graded too: `docs/risk-analysis.md`, `docs/implementation-plan.md`, `docs/metrics.md`, `docs/eco-impact.md`, `docs/privacy-and-ethics.md`, `docs/limitations.md`, `docs/demo-script.md`. Keep them matching the real implementation.
 
 ## Stack and layout
-- `apps/web` React + Vite + TypeScript PWA (Tailwind, react-i18next; English + Hindi).
+- `2-user-report-site` React + Vite + TypeScript PWA (Tailwind, react-i18next; English + Hindi).
 - `functions/` Firebase Cloud Functions (TypeScript). Firestore, Storage, Auth.
-- `services/vision/` Python 3.11: ultralytics (yolov8n, yolov8n-pose), supervision, OpenCV, firebase-admin.
+- `3-auto-cv/` Python 3.11: ultralytics (yolov8n, yolov8n-pose), supervision, OpenCV, firebase-admin.
 - `docs/`, `scripts/seed`, `firebase.json`.
 - Develop and demo on the **Firebase Emulator Suite** (offline, no billing). Provide `.env.example`; never commit secrets.
 - Strict TypeScript, Prettier/ESLint; Python with ruff. Few dependencies, boring idiomatic code.
-- Run commands (need Java 21+ on PATH for the emulators): `npm install`; `npm run dev` (emulators + web; UI :4000, web :5173); `npm run seed` (second terminal, emulators up); `npm run lint | typecheck | test | build | format`; `npm run test:rules` (rules tests, starts emulators); `npm run smoke` (E2E trigger check, needs dev + seed running). Vision: `cd services/vision && python -m vision_service --source <video> --zones zones.yaml` (see its README); `python -m pytest`; `ruff check .`. Browser E2E: `python scripts/e2e/ui_flow.py` (Playwright + Chrome).
+- Run commands (need Java 21+ on PATH for the emulators): `npm install`; `npm run dev` (emulators + web; UI :4000, web :5173); `npm run seed` (second terminal, emulators up); `npm run lint | typecheck | test | build | format`; `npm run test:rules` (rules tests, starts emulators); `npm run smoke` (E2E trigger check, needs dev + seed running). Vision: `cd 3-auto-cv && python -m vision_service --source <video> --zones zones.yaml` (see its README); `python -m pytest`; `ruff check .`. Browser E2E: `python scripts/e2e/ui_flow.py` (Playwright + Chrome).
 - Repo conventions: project id `demo-plant-line3`; `.env` is gitignored, never read or commit it; LF line endings (`.gitattributes`).
 
 ## Hard rules

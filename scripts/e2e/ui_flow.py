@@ -142,6 +142,36 @@ with sync_playwright() as p:
     board.screenshot(path=str(OUT / "5-board.png"))
     print("PASS public board shows the fix (no login)")
 
+    # Product 2: user site, manual report with machine dropdown + typed details + photo.
+    m = browser.new_context(viewport={"width": 360, "height": 740}, is_mobile=True, has_touch=True).new_page()
+    m.on("pageerror", lambda e: errors.append(str(e)))
+    m.goto(f"{BASE}/")
+    m.get_by_role("link", name="Report an incident").click()
+    expect(m.get_by_role("button", name="Choose the machine / area")).to_be_disabled()
+    m.get_by_label("Choose the machine / area").select_option("filler")
+    m.get_by_role("radio", name="Slip / trip").click()
+    m.get_by_label("What happened? (optional)").fill("Oil on floor near the filler, nearly slipped")
+    m.set_input_files("input[type=file]", files=[{"name": "p.jpg", "mimeType": "image/jpeg", "buffer": jpeg_bytes()}])
+    m.screenshot(path=str(OUT / "6-manual-report.png"))
+    m.get_by_role("button", name="Send report").click()
+    expect(m.get_by_text("Thank you. You made the plant safer.")).to_be_visible()
+    print("PASS user site: manual report with machine, details and photo")
+
+    # Product 1: sticker app (separate app, port 5174): sticker sheet + scan target.
+    STICKER = "http://localhost:5174"
+    st = browser.new_context(viewport={"width": 1000, "height": 900}).new_page()
+    st.on("pageerror", lambda e: errors.append(str(e)))
+    st.goto(f"{STICKER}/")
+    expect(st.get_by_role("img", name="QR for Filler")).to_be_visible(timeout=15000)
+    st.screenshot(path=str(OUT / "7-stickers.png"))
+    ph = browser.new_context(viewport={"width": 360, "height": 740}, is_mobile=True, has_touch=True).new_page()
+    ph.on("pageerror", lambda e: errors.append(str(e)))
+    ph.goto(f"{STICKER}/r/labeller")
+    ph.get_by_role("radio", name="Forklift / vehicle").click()
+    ph.get_by_role("button", name="Send report").click()
+    expect(ph.get_by_text("Thank you. You made the plant safer.")).to_be_visible()
+    print("PASS sticker app: sticker sheet and scan-to-report")
+
     browser.close()
 
 if errors:
