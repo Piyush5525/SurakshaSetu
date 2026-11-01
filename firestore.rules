@@ -45,7 +45,7 @@ service cloud.firestore {
         && d.seriousHarmFlag is bool
         && d.injuryNow is bool
         && d.transcript is string && d.transcript.size() <= 1000
-        && d.transcriptStatus in ['transcribed', 'not_transcribed', 'no_audio']
+        && d.transcriptStatus in ['transcribed', 'typed', 'not_transcribed', 'no_audio']
         && (!('audioPath' in d) || d.audioPath == null || (d.audioPath is string && d.audioPath.size() <= 200))
         && (!('photoPath' in d) || d.photoPath == null || (d.photoPath is string && d.photoPath.size() <= 200))
         && d.lang in ['en', 'hi']

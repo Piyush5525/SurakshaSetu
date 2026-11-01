@@ -86,6 +86,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--idle-minutes", type=float, default=5.0, help="idle machine rule: minutes with nobody present"
     )
+    p.add_argument(
+        "--auto-report",
+        action="store_true",
+        help="skip human confirmation: every detection becomes a report at once (marked 'auto'; expect false alarms)",
+    )
     p.add_argument("--print-model-names", action="store_true", help="load models, print model.names, exit")
     args = p.parse_args(argv)
     args.source = _resolve(args.source)
@@ -122,7 +127,9 @@ def load_models(args: argparse.Namespace):
 def make_sink(args: argparse.Namespace) -> Sink:
     if args.sink == "local":
         return LocalSink(args.out_dir)
-    return FirestoreSink(args.project, args.bucket or f"{args.project}.appspot.com")
+    return FirestoreSink(
+        args.project, args.bucket or f"{args.project}.appspot.com", auto_report=args.auto_report
+    )
 
 
 def run(args: argparse.Namespace) -> Counter:

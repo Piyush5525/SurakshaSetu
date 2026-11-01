@@ -2,10 +2,19 @@ import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { useCol, type LocationDoc } from './data';
 
+declare const __LAN_IP__: string;
+
+/** Phones cannot open localhost, so prefer this computer's Wi-Fi address. */
+function defaultBase(): string {
+  const { hostname, port, protocol } = window.location;
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1') return window.location.origin;
+  return __LAN_IP__ ? `${protocol}//${__LAN_IP__}:${port}` : window.location.origin;
+}
+
 /** Printable QR sticker sheet. Use the browser's Print → "Save as PDF". */
 export default function Stickers() {
   const locations = useCol<LocationDoc>('locations');
-  const [base, setBase] = useState(window.location.origin);
+  const [base, setBase] = useState(defaultBase());
   const [codes, setCodes] = useState<Record<string, string>>({});
 
   useEffect(() => {

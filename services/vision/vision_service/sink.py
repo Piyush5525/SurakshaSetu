@@ -68,7 +68,8 @@ class FirestoreSink:
     Uses the emulators via FIRESTORE_EMULATOR_HOST and STORAGE_EMULATOR_HOST (no credentials needed).
     """
 
-    def __init__(self, project: str, bucket: str) -> None:
+    def __init__(self, project: str, bucket: str, auto_report: bool = False) -> None:
+        self.auto_report = auto_report
         from google.auth.credentials import AnonymousCredentials
         from google.cloud import firestore, storage
 
@@ -84,4 +85,8 @@ class FirestoreSink:
         path = f"events/{ref.id}.jpg"
         self.bucket.blob(path).upload_from_string(snapshot_jpeg, content_type="image/jpeg")
         ref.set(_doc(event, path, simulated, datetime.now(UTC)))
+        if self.auto_report:
+            # Straight to a triaged report (the Cloud Function reacts to pending -> confirmed).
+            # Marked "auto" so the dashboard shows nobody reviewed it. Use with care: false alarms.
+            ref.update({"status": "confirmed", "reviewedByRole": "auto", "reviewedAt": datetime.now(UTC)})
         return ref.id
