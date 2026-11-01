@@ -399,3 +399,5 @@ The full, honest list is [docs/limitations.md](docs/limitations.md). The ones th
 - **Public figures** shown in Settings come from L'Oréal's published documents with links and a note on how each was checked; the logo and banner in `docs/assets/` are original artwork.
 
 <p align="center"><sub>SurakshaSetu · built for a hackathon, designed to be honest about what it is.</sub></p>
+#   S u r a k s h a S e t u  
+ 
