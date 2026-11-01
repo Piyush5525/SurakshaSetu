@@ -1,40 +1,23 @@
-// One command to start everything: Firebase emulators + sticker app (:5174) + user site (:5173).
-// Finds Java 21+ by itself (PATH, JAVA_HOME or ~/.jdk/jdk-*), because the emulators need it.
+// One command to start everything: central API (:8000) + user site (:5173) + sticker app (:5174).
+// No Java or Firebase needed any more. Python 3.11+ with `pip install -r backend/requirements.txt` is required.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { delimiter, join } from 'node:path';
 
-function javaMajor(bin) {
-  const r = spawnSync(bin, ['-version'], { encoding: 'utf8' });
-  const m = /version "(\d+)(?:\.(\d+))?/.exec(`${r.stderr}${r.stdout}`);
-  if (!m) return 0;
-  return m[1] === '1' ? Number(m[2]) : Number(m[1]);
-}
-
-const exe = process.platform === 'win32' ? 'java.exe' : 'java';
-const candidates = [];
-if (process.env.JAVA_HOME) candidates.push(join(process.env.JAVA_HOME, 'bin'));
-const jdkRoot = join(homedir(), '.jdk');
-if (existsSync(jdkRoot)) {
-  for (const d of readdirSync(jdkRoot)) candidates.push(join(jdkRoot, d, 'bin'));
-}
-let env = { ...process.env };
-if (javaMajor('java') < 21) {
-  const dir = candidates.find((c) => existsSync(join(c, exe)) && javaMajor(join(c, exe)) >= 21);
-  if (!dir) {
-    console.error(
-      'Java 21+ is required by the Firebase emulators (found: ' +
-        javaMajor('java') +
-        ').\nInstall a free JDK 21 (https://adoptium.net) or set JAVA_HOME, then run again.',
-    );
+const py = process.platform === 'win32' ? 'python' : 'python3';
+const probe = spawnSync(py, ['-c', 'import fastapi, uvicorn, segno, reportlab, jwt'], {
+  encoding: 'utf8',
+});
+if (probe.status !== 0) {
+  console.log('Installing backend dependencies (one time)...');
+  const r = spawnSync(py, ['-m', 'pip', 'install', '-r', 'backend/requirements.txt'], {
+    stdio: 'inherit',
+  });
+  if (r.status !== 0) {
+    console.error('Could not install backend/requirements.txt. Run it manually, then try again.');
     process.exit(1);
   }
-  env = { ...env, PATH: `${dir}${delimiter}${env.PATH}`, JAVA_HOME: join(dir, '..') };
-  console.log(`Using Java from ${dir}`);
 }
 
-const cmd = 'npx concurrently -k -n emu,site,sticker -c blue,green,magenta';
-const args = ['"npm:emulators"', '"npm:dev -w 2-user-report-site"', '"npm:dev -w 1-sticker-app"'];
-const child = spawn(`${cmd} ${args.join(' ')}`, { stdio: 'inherit', shell: true, env });
+const api = `${py} -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000`;
+const cmd = `npx concurrently -k -n api,site,sticker -c blue,green,magenta "${api}" "npm:dev -w 2-user-report-site" "npm:dev -w 1-sticker-app"`;
+const child = spawn(cmd, { stdio: 'inherit', shell: true });
 child.on('exit', (c) => process.exit(c ?? 0));

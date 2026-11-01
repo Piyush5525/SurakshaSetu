@@ -1,142 +1,165 @@
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth';
-import { useEffect, useState } from 'react';
-import { Link, NavLink, Route, Routes } from 'react-router-dom';
-import { auth } from '@common/lib/firebase';
-import ActionsTab from './ActionsTab';
-import DispatchTab from './DispatchTab';
-import EventsTab from './EventsTab';
-import Inbox from './Inbox';
+import { useState } from 'react';
+import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import { currentUser, login, logout, type User } from '@common/lib/api';
+import Analytics from './Analytics';
+import Assets from './Assets';
+import Incidents from './Incidents';
+import Live from './Live';
+import MapView from './MapView';
+import Notifications from './Notifications';
 import Overview from './Overview';
+import { LiveProvider, useGet, useLive } from './hooks';
 
-export type Role = 'supervisor' | 'ehs_admin';
+const TABS: [string, string, string][] = [
+  ['', 'Overview', 'responder'],
+  ['live', 'Live monitoring', 'responder'],
+  ['incidents', 'Incidents', 'responder'],
+  ['map', 'Factory map', 'responder'],
+  ['assets', 'Machines & QR', 'responder'],
+  ['notifications', 'Notifications & team', 'responder'],
+  ['analytics', 'Analytics', 'responder'],
+];
 
-function useStaff(): { user: User | null; role: Role | null; ready: boolean } {
-  const [state, setState] = useState<{ user: User | null; role: Role | null; ready: boolean }>({
-    user: null,
-    role: null,
-    ready: false,
-  });
-  useEffect(
-    () =>
-      onAuthStateChanged(auth, async (u) => {
-        if (!u || u.isAnonymous) return setState({ user: null, role: null, ready: true });
-        const t = await u.getIdTokenResult(true);
-        const r = t.claims.role;
-        setState({
-          user: u,
-          role: r === 'supervisor' || r === 'ehs_admin' ? r : null,
-          ready: true,
-        });
-      }),
-    [],
-  );
-  return state;
-}
-
-function Login() {
-  const [email, setEmail] = useState('supervisor@demo.local');
-  const [password, setPassword] = useState('demo1234');
+function SignIn({ onDone }: { onDone: (u: User) => void }) {
+  const [u, setU] = useState('admin');
+  const [p, setP] = useState('');
   const [err, setErr] = useState('');
   return (
     <div className="mx-auto mt-16 max-w-sm rounded-2xl bg-white p-6 shadow">
-      <h1 className="text-2xl font-bold">Staff sign-in</h1>
+      <h1 className="text-2xl font-extrabold">Control centre sign in</h1>
       <p className="mb-4 text-sm text-slate-600">
-        Demo Plant — Line 3 (fictional). Emulator accounts: supervisor@demo.local or ehs@demo.local,
-        password demo1234.
+        Staff only. Authorised use: camera and audio monitoring is restricted.
       </p>
-      <input
-        className="mb-2 w-full rounded border p-2"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        aria-label="Email"
-      />
-      <input
-        className="mb-3 w-full rounded border p-2"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        aria-label="Password"
-      />
-      {err && <p className="mb-2 text-sm text-red-700">{err}</p>}
-      <button
-        className="w-full rounded bg-slate-900 p-2 font-semibold text-white"
-        onClick={() =>
-          void signInWithEmailAndPassword(auth, email, password).catch(() =>
-            setErr('Sign-in failed. Are the emulators running and seeded?'),
-          )
-        }
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          login(u, p)
+            .then(onDone)
+            .catch((x: unknown) => setErr(x instanceof Error ? x.message : 'Failed'));
+        }}
       >
-        Sign in
-      </button>
-      <Link to="/" className="mt-4 block text-center text-sm text-slate-600 underline">
-        Back to worker app
+        <label className="block text-sm font-semibold">
+          Username
+          <input
+            className="mt-1 w-full rounded border p-2"
+            value={u}
+            onChange={(e) => setU(e.target.value)}
+            autoComplete="username"
+          />
+        </label>
+        <label className="mt-3 block text-sm font-semibold">
+          Password
+          <input
+            className="mt-1 w-full rounded border p-2"
+            type="password"
+            value={p}
+            onChange={(e) => setP(e.target.value)}
+            autoComplete="current-password"
+          />
+        </label>
+        {err && <p className="mt-2 text-sm font-bold text-red-700">{err}</p>}
+        <button className="mt-4 w-full rounded bg-slate-900 py-2 font-bold text-white">
+          Sign in
+        </button>
+      </form>
+      <p className="mt-4 text-xs text-slate-500">
+        Demo accounts (local only): admin, manager.ehs, responder.maint. Password: demo1234 (set
+        DEMO_PASSWORD to change).
+      </p>
+      <Link to="/" className="mt-3 block text-center text-sm underline">
+        Back to reporting
       </Link>
     </div>
   );
 }
 
-const tabs = [
-  ['', 'Overview'],
-  ['inbox', 'Inbox'],
-  ['actions', 'Actions'],
-  ['events', 'Camera events'],
-  ['dispatch', 'Dispatch (simulated)'],
-] as const;
-
-export default function Admin() {
-  const { user, role, ready } = useStaff();
-  if (!ready) return <p className="p-6">Loading…</p>;
-  if (!user) return <Login />;
-  if (!role)
-    return (
-      <div className="p-6">
-        <p>This account has no staff role.</p>
-        <button className="underline" onClick={() => void signOut(auth)}>
-          Sign out
-        </button>
-      </div>
-    );
+function Banner() {
+  const { data } = useGet<{
+    mode_text: string;
+    demo_mode: boolean;
+    telegram_configured: boolean;
+    calls_configured: boolean;
+    calls_enabled: boolean;
+  }>('/system/status', false);
+  const { connected } = useLive();
+  if (!data) return null;
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="flex flex-wrap items-center justify-between gap-2 bg-slate-900 px-4 py-3 text-white print:hidden">
-        <div>
-          <h1 className="text-lg font-bold">Safer Work — EHS dashboard</h1>
-          <p className="text-xs text-slate-300">
-            Demo Plant — Line 3 (fictional) · {user.email} · {role}
-          </p>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <Link to="/board" className="underline">
-            Board
+    <div
+      className={`px-4 py-1 text-center text-sm font-bold ${data.demo_mode ? 'bg-purple-700 text-white' : 'bg-red-700 text-white'}`}
+    >
+      {data.mode_text}
+      {data.demo_mode
+        ? ` · Telegram ${data.telegram_configured ? 'configured' : 'not set'} · calls ${data.calls_configured ? 'configured' : 'not set'} (calls ${data.calls_enabled ? 'on' : 'off'})`
+        : ''}
+      {' · '}
+      <span className={connected ? 'text-green-200' : 'text-yellow-200'}>
+        {connected ? 'live updates on' : 'reconnecting…'}
+      </span>
+    </div>
+  );
+}
+
+function Shell2({ user, onOut }: { user: User; onOut: () => void }) {
+  return (
+    <LiveProvider>
+      <div className="min-h-screen bg-slate-100 text-slate-900">
+        <Banner />
+        <header className="flex flex-wrap items-center gap-3 bg-slate-900 px-4 py-3 text-white">
+          <Link to="/admin" className="text-xl font-black text-yellow-300">
+            Control centre
           </Link>
-          <button className="underline" onClick={() => void signOut(auth)}>
+          <nav className="flex flex-1 flex-wrap gap-1">
+            {TABS.map(([to, label]) => (
+              <NavLink
+                key={to}
+                to={`/admin/${to}`}
+                end={to === ''}
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-1.5 text-sm font-bold ${isActive ? 'bg-yellow-300 text-slate-950' : 'bg-slate-700'}`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+          <span className="text-sm text-slate-300">
+            {user.username} ({user.role})
+          </span>
+          <button onClick={onOut} className="rounded bg-slate-700 px-3 py-1 text-sm font-bold">
             Sign out
           </button>
-        </div>
-      </header>
-      <nav className="flex flex-wrap gap-1 border-b bg-white px-4 print:hidden">
-        {tabs.map(([to, label]) => (
-          <NavLink
-            key={to}
-            to={`/admin/${to}`}
-            end
-            className={({ isActive }) =>
-              `px-3 py-3 text-sm font-semibold ${isActive ? 'border-b-4 border-yellow-400' : 'text-slate-600'}`
-            }
-          >
-            {label}
-          </NavLink>
-        ))}
-      </nav>
-      <div className="mx-auto max-w-7xl p-4">
-        <Routes>
-          <Route index element={<Overview role={role} />} />
-          <Route path="inbox" element={<Inbox />} />
-          <Route path="actions" element={<ActionsTab />} />
-          <Route path="events" element={<EventsTab role={role} />} />
-          <Route path="dispatch" element={<DispatchTab role={role} />} />
-        </Routes>
+        </header>
+        <main className="mx-auto max-w-7xl p-4">
+          <Routes>
+            <Route index element={<Overview />} />
+            <Route path="live" element={<Live />} />
+            <Route path="incidents" element={<Incidents />} />
+            <Route path="incidents/:id" element={<Incidents />} />
+            <Route path="map" element={<MapView />} />
+            <Route path="assets" element={<Assets />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="analytics" element={<Analytics />} />
+          </Routes>
+        </main>
       </div>
-    </div>
+    </LiveProvider>
+  );
+}
+
+export default function Admin() {
+  const [user, setUser] = useState<User | null>(currentUser());
+  const nav = useNavigate();
+  if (!user || user.role === 'worker') {
+    return <SignIn onDone={(u) => setUser(u)} />;
+  }
+  return (
+    <Shell2
+      user={user}
+      onOut={() => {
+        logout();
+        setUser(null);
+        nav('/admin');
+      }}
+    />
   );
 }

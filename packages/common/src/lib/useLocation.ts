@@ -1,56 +1,73 @@
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { db, ensureAnonymous } from './firebase';
+import { ApiError, api } from './api';
 
-export interface LocationInfo {
+export interface AssetInfo {
   id: string;
   name: string;
-  nameHi: string;
+  name_hi: string | null;
+  kind?: string;
+  zone?: string;
 }
 
-/** Location name for the QR link. Cached locally so the form still opens with no network. */
-export function useLocationInfo(id: string | undefined): LocationInfo | null {
-  const [info, setInfo] = useState<LocationInfo | null>(() => {
-    if (!id) return null;
-    const cached = localStorage.getItem(`sw.loc.${id}`);
-    return cached ? (JSON.parse(cached) as LocationInfo) : { id, name: id, nameHi: id };
+export interface Category {
+  id: string;
+  label: string;
+  department: string;
+  ai: 'trained' | 'partial' | 'experimental' | 'pending';
+}
+
+/** Machines for pickers, cached so the form still opens with no network. */
+export function useAssets(): AssetInfo[] {
+  const [rows, setRows] = useState<AssetInfo[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sw.assets') ?? '[]') as AssetInfo[];
+    } catch {
+      return [];
+    }
   });
   useEffect(() => {
-    if (!id) return;
-    let alive = true;
-    ensureAnonymous()
-      .then(() => getDoc(doc(db, 'locations', id)))
-      .then((snap) => {
-        if (!alive || !snap.exists()) return;
-        const d = snap.data();
-        const next = { id, name: String(d.name), nameHi: String(d.nameHi ?? d.name) };
-        localStorage.setItem(`sw.loc.${id}`, JSON.stringify(next));
-        setInfo(next);
+    api<AssetInfo[]>('/public/assets', { authed: false })
+      .then((r) => {
+        setRows(r);
+        localStorage.setItem('sw.assets', JSON.stringify(r));
       })
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [id]);
-  return info;
-}
-
-/** All machines/locations, for pickers. */
-export function useLocations(): LocationInfo[] {
-  const [rows, setRows] = useState<LocationInfo[]>([]);
-  useEffect(() => {
-    ensureAnonymous()
-      .then(() => getDocs(collection(db, 'locations')))
-      .then((s) =>
-        setRows(
-          s.docs.map((d) => ({
-            id: d.id,
-            name: String(d.data().name),
-            nameHi: String(d.data().nameHi ?? d.data().name),
-          })),
-        ),
-      )
       .catch(() => undefined);
   }, []);
   return rows;
+}
+
+export function useCategories(): Category[] {
+  const [rows, setRows] = useState<Category[]>([]);
+  useEffect(() => {
+    api<Category[]>('/public/categories', { authed: false })
+      .then(setRows)
+      .catch(() => undefined);
+  }, []);
+  return rows;
+}
+
+export type QrState =
+  | { state: 'loading' }
+  | { state: 'ok'; asset: AssetInfo }
+  | { state: 'error'; message: string; offline: boolean };
+
+/** Resolve a scanned QR token to its machine (server-side, so the sticker carries no machine data). */
+export function useQr(token: string | undefined): QrState {
+  const [s, setS] = useState<QrState>({ state: 'loading' });
+  useEffect(() => {
+    if (!token) return;
+    const key = `sw.qr.${token}`;
+    api<AssetInfo>(`/public/qr/${encodeURIComponent(token)}`, { authed: false })
+      .then((a) => {
+        localStorage.setItem(key, JSON.stringify(a));
+        setS({ state: 'ok', asset: a });
+      })
+      .catch((e: unknown) => {
+        if (e instanceof ApiError) return setS({ state: 'error', message: e.message, offline: false });
+        const cached = localStorage.getItem(key); // offline: use the last-known machine name
+        if (cached) return setS({ state: 'ok', asset: JSON.parse(cached) as AssetInfo });
+        setS({ state: 'error', message: 'Cannot reach the server', offline: true });
+      });
+  }, [token]);
+  return s;
 }

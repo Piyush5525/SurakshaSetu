@@ -1,38 +1,41 @@
-import { shiftForHour, type HazardType } from '@shared/domain';
-import { HAZARD_TYPES } from '@shared/domain';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Shell } from '../components/Shell';
-import { HAZARD_ICONS } from '../lib/hazards';
+import { HAZARD_ICONS, HAZARD_TYPES, type HazardType } from '../lib/hazards';
 import { compressImage } from '../lib/image';
 import { newReportId, submitReport } from '../lib/submit';
-import { useLocationInfo, useLocations } from '../lib/useLocation';
+import { useAssets, useCategories, useQr } from '../lib/useLocation';
 import { useVoiceNote } from '../lib/voice';
 
-type Shift = 'A' | 'B' | 'C';
-
+/**
+ * One report form, two entry points:
+ *  - QR sticker  (/q/:token)  -> machine is resolved from the sticker, nothing to pick
+ *  - Worker portal (/report)  -> pick the machine / area from a list
+ * Both send to the same endpoint and become the same kind of incident.
+ */
 export default function Report() {
-  const params = useParams();
-  const manual = !params.locationId;
-  const [picked, setPicked] = useState('');
-  const locationId = params.locationId ?? picked;
-  const allLocs = useLocations();
-  const [details, setDetails] = useState('');
+  const { token } = useParams();
+  const qr = useQr(token);
+  const manual = !token;
   const { t, i18n } = useTranslation();
   const lang = i18n.language === 'hi' ? 'hi' : 'en';
   const nav = useNavigate();
-  const loc = useLocationInfo(locationId);
+  const assets = useAssets();
+  const categories = useCategories();
   const voice = useVoiceNote(lang);
+  const [picked, setPicked] = useState('');
   const [hazard, setHazard] = useState<HazardType | null>(null);
+  const [category, setCategory] = useState('');
+  const [details, setDetails] = useState('');
   const [harm, setHarm] = useState(false);
   const [hurtNow, setHurtNow] = useState(false);
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [shift, setShift] = useState<Shift>(shiftForHour(new Date().getHours()));
+  const [video, setVideo] = useState<File | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [started] = useState(() => Date.now());
+  const [err, setErr] = useState('');
 
   async function onPhoto(file: File | undefined) {
     if (!file) return;
@@ -41,39 +44,63 @@ export default function Report() {
     setPhotoUrl(URL.createObjectURL(blob));
   }
 
+  function onVideo(file: File | undefined) {
+    if (!file) return;
+    if (file.size > 60 * 1024 * 1024)
+      return setErr('Video is larger than 60 MB. Please choose a shorter clip.');
+    setErr('');
+    setVideo(file);
+  }
+
+  const qrOk = !manual && (qr.state === 'ok' || (qr.state === 'error' && qr.offline));
+  const asset = qr.state === 'ok' ? qr.asset : assets.find((a) => a.id === picked);
+  const machine = asset ? (lang === 'hi' ? (asset.name_hi ?? asset.name) : asset.name) : '';
+  const ready = (manual ? !!picked : qrOk) && (!!hazard || !!category);
+
   async function onSubmit() {
-    if (!hazard || !locationId || busy) return;
+    if (!ready || busy) return;
     setBusy(true);
     if (voice.recording) voice.stop();
     const id = newReportId();
-    const transcript = [details.trim(), voice.transcript].filter(Boolean).join(' — ').slice(0, 900);
+    const text = [details.trim(), voice.transcript].filter(Boolean).join(' — ');
     await submitReport({
       id,
-      createdAtMs: started,
+      createdAtMs: Date.now(),
+      assetName: machine,
       fields: {
-        locationId,
-        hazardType: hazard,
-        seriousHarmFlag: harm,
+        source: manual ? 'portal' : 'qr',
+        ...(manual ? { assetId: picked } : { qrToken: token }),
+        ...(category ? { category } : {}),
+        ...(hazard ? { hazardType: hazard } : {}),
+        description: text,
+        seriousHarm: harm,
         injuryNow: hurtNow,
-        transcript,
-        transcriptStatus: voice.transcript
-          ? 'transcribed'
-          : details.trim()
-            ? 'typed'
-            : voice.audio
-              ? 'not_transcribed'
-              : 'no_audio',
         lang,
-        shift,
         ...(name.trim() ? { reporterName: name.trim() } : {}),
       },
       ...(voice.audio ? { audio: voice.audio } : {}),
       ...(photo ? { photo } : {}),
+      ...(video ? { video } : {}),
     });
     nav(`/receipt/${id}`);
   }
 
-  const locLabel = lang === 'hi' ? (loc?.nameHi ?? locationId) : (loc?.name ?? locationId);
+  if (!manual && qr.state === 'loading') {
+    return (
+      <Shell>
+        <p className="mt-10 text-center text-lg">{t('common.loading')}</p>
+      </Shell>
+    );
+  }
+  if (!manual && qr.state === 'error' && !qr.offline) {
+    return (
+      <Shell>
+        <div className="mt-6 rounded-2xl border-2 border-amber-400 bg-amber-950 p-5 text-lg font-bold text-amber-100">
+          {qr.message}
+        </div>
+      </Shell>
+    );
+  }
 
   return (
     <Shell>
@@ -86,14 +113,20 @@ export default function Report() {
           className="mb-4 w-full rounded-2xl border-4 border-slate-700 bg-slate-800 p-4 text-xl font-bold"
         >
           <option value="">{t('report.pickMachine')}</option>
-          {allLocs.map((l) => (
-            <option key={l.id} value={l.id}>
-              {lang === 'hi' ? l.nameHi : l.name}
+          {assets.map((a) => (
+            <option key={a.id} value={a.id}>
+              {lang === 'hi' ? (a.name_hi ?? a.name) : a.name}
             </option>
           ))}
         </select>
       ) : (
-        <h1 className="mb-4 text-3xl font-extrabold">{locLabel}</h1>
+        <>
+          <h1 className="mb-1 text-3xl font-extrabold">{machine || '…'}</h1>
+          {qr.state === 'error' && (
+            <p className="mb-3 text-sm text-amber-300">{t('report.offlineMachine')}</p>
+          )}
+          <div className="mb-3" />
+        </>
       )}
 
       <h2 className="mb-2 text-lg font-bold">{t('report.whatSaw')}</h2>
@@ -118,27 +151,52 @@ export default function Report() {
         ))}
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3">
-        <div>
-          <button
-            onClick={() => (voice.recording ? voice.stop() : void voice.start())}
-            className={`min-h-20 w-full rounded-2xl border-4 p-3 text-base font-bold ${
-              voice.recording
-                ? 'animate-pulse border-red-500 bg-red-700'
-                : 'border-slate-700 bg-slate-800'
-            }`}
-          >
-            <span className="block text-3xl" aria-hidden>
-              🎙️
-            </span>
-            {voice.recording
-              ? t('report.voiceStop')
-              : voice.audio
-                ? t('report.voiceRedo')
-                : t('report.voiceStart')}
-          </button>
-        </div>
-        <label className="flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-2xl border-4 border-slate-700 bg-slate-800 p-3 text-center text-base font-bold">
+      <label className="mt-4 block text-sm text-slate-300">
+        {t('report.category')}
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="mt-1 w-full rounded-xl border-2 border-slate-700 bg-slate-800 p-3 text-base font-semibold text-white"
+        >
+          <option value="">—</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {t(`cat.${c.id}`, c.label)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="mt-5 block text-base font-bold">
+        {t('report.details')}
+        <textarea
+          value={details}
+          onChange={(e) => setDetails(e.target.value.slice(0, 600))}
+          rows={3}
+          placeholder={t('report.detailsHint')}
+          className="mt-2 w-full rounded-2xl border-4 border-slate-700 bg-slate-800 p-3 text-base font-normal"
+        />
+      </label>
+
+      <div className="mt-5 grid grid-cols-3 gap-2">
+        <button
+          onClick={() => (voice.recording ? voice.stop() : void voice.start())}
+          className={`min-h-20 rounded-2xl border-4 p-2 text-sm font-bold ${
+            voice.recording
+              ? 'animate-pulse border-red-500 bg-red-700'
+              : 'border-slate-700 bg-slate-800'
+          }`}
+        >
+          <span className="block text-3xl" aria-hidden>
+            🎙️
+          </span>
+          {voice.recording
+            ? t('report.voiceStop')
+            : voice.audio
+              ? t('report.voiceRedo')
+              : t('report.voiceStart')}
+        </button>
+        <label className="flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-2xl border-4 border-slate-700 bg-slate-800 p-2 text-center text-sm font-bold">
           <span className="text-3xl" aria-hidden>
             📷
           </span>
@@ -151,7 +209,20 @@ export default function Report() {
             onChange={(e) => void onPhoto(e.target.files?.[0])}
           />
         </label>
+        <label className="flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-2xl border-4 border-slate-700 bg-slate-800 p-2 text-center text-sm font-bold">
+          <span className="text-3xl" aria-hidden>
+            🎥
+          </span>
+          {video ? t('report.videoAttached') : t('report.videoAdd')}
+          <input
+            type="file"
+            accept="video/mp4,video/webm,video/quicktime"
+            className="sr-only"
+            onChange={(e) => onVideo(e.target.files?.[0])}
+          />
+        </label>
       </div>
+      {err && <p className="mt-2 text-sm text-amber-300">{err}</p>}
       {voice.error && <p className="mt-2 text-sm text-amber-300">{t('report.micDenied')}</p>}
       {voice.audio && !voice.recording && (
         <p className="mt-2 text-sm text-green-300">
@@ -170,17 +241,6 @@ export default function Report() {
           <p className="mt-1 text-sm text-amber-300">{t('report.photoFaces')}</p>
         </div>
       )}
-
-      <label className="mt-5 block text-base font-bold">
-        {t('report.details')}
-        <textarea
-          value={details}
-          onChange={(e) => setDetails(e.target.value.slice(0, 600))}
-          rows={3}
-          placeholder={t('report.detailsHint')}
-          className="mt-2 w-full rounded-2xl border-4 border-slate-700 bg-slate-800 p-3 text-base font-normal"
-        />
-      </label>
 
       <label className="mt-5 flex items-center gap-3 rounded-2xl bg-slate-800 p-4 text-base font-bold">
         <input
@@ -206,21 +266,6 @@ export default function Report() {
         </p>
       )}
 
-      <div className="mt-5">
-        <p className="mb-2 text-sm text-slate-300">{t('report.shift')}</p>
-        <div className="grid grid-cols-3 gap-2">
-          {(['A', 'B', 'C'] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setShift(s)}
-              className={`rounded-xl py-3 text-lg font-bold ${shift === s ? 'bg-yellow-300 text-slate-950' : 'bg-slate-800'}`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
-
       <details className="mt-4 rounded-2xl bg-slate-900 p-3">
         <summary className="cursor-pointer text-sm text-slate-300">{t('report.name')}</summary>
         <input
@@ -234,15 +279,15 @@ export default function Report() {
 
       <p className="mt-4 text-center text-sm text-slate-300">{t('report.anonymous')}</p>
       <button
-        disabled={!hazard || !locationId || busy}
+        disabled={!ready || busy}
         onClick={() => void onSubmit()}
         className="mt-3 w-full rounded-2xl bg-yellow-300 py-5 text-xl font-extrabold text-slate-950 disabled:bg-slate-700 disabled:text-slate-400"
       >
         {busy
           ? t('report.sending')
-          : !locationId
+          : manual && !picked
             ? t('report.pickMachine')
-            : hazard
+            : ready
               ? t('report.submit')
               : t('report.pickHazard')}
       </button>

@@ -3,31 +3,34 @@
  * If the network is down the report stays "waiting to send" and is retried (see submit.ts).
  */
 export interface ReportFields {
-  locationId: string;
-  hazardType: string;
-  seriousHarmFlag: boolean;
+  source: 'qr' | 'portal';
+  qrToken?: string;
+  assetId?: string;
+  category?: string;
+  hazardType?: string;
+  description: string;
+  seriousHarm: boolean;
   injuryNow: boolean;
-  transcript: string;
-  transcriptStatus: 'transcribed' | 'typed' | 'not_transcribed' | 'no_audio';
   lang: 'en' | 'hi';
-  shift: 'A' | 'B' | 'C';
   reporterName?: string;
 }
 
 export interface QueuedReport {
-  id: string;
+  id: string; // local id (also the receipt URL)
   fields: ReportFields;
   createdAtMs: number;
+  assetName?: string;
   audio?: Blob;
   photo?: Blob;
-  audioUploaded?: boolean;
-  photoUploaded?: boolean;
+  video?: Blob;
   state: 'waiting' | 'sent';
   attempts: number;
+  serverId?: string; // INC-… once accepted
+  trackingCode?: string; // secret that lets this phone read the status
   lastError?: string;
 }
 
-const DB = 'safer-work';
+const DB = 'safer-work-v2';
 const STORE = 'reports';
 
 function open(): Promise<IDBDatabase> {

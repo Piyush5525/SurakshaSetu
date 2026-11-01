@@ -1,4 +1,13 @@
-import type { HazardType } from '@shared/domain';
+export const HAZARD_TYPES = [
+  'pinch_jam',
+  'forklift',
+  'chemical_spill',
+  'slip_trip',
+  'manual_handling',
+  'electrical_lockout',
+  'other',
+] as const;
+export type HazardType = (typeof HAZARD_TYPES)[number];
 
 /** Icon-first hazard picker: big emoji + short label (labels come from i18n `hazards.*`). */
 export const HAZARD_ICONS: Record<HazardType, { icon: string; ring: string }> = {

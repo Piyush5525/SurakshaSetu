@@ -4,30 +4,26 @@
   "version": "0.0.0",
   "workspaces": [
     "1-sticker-app",
-    "2-user-report-site",
-    "functions",
-    "rules-tests"
+    "2-user-report-site"
   ],
   "engines": {
     "node": ">=20"
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "emulators": "npm run build -w functions && firebase emulators:start --project demo-plant-line3",
-    "seed": "tsx scripts/seed/seed.ts",
-    "smoke": "tsx scripts/seed/smoke.ts",
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p scripts/seed --noEmit && tsc -p rules-tests --noEmit",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "test": "npm run test --workspaces --if-present",
-    "test:rules": "firebase emulators:exec --only firestore,storage --project demo-plant-line3 \"npm run test:rules -w rules-tests\"",
-    "test:all": "npm test && npm run test:rules",
+    "test": "npm run test --workspaces --if-present && python -m pytest backend/tests -q",
     "dev:sticker": "npm run dev -w 1-sticker-app",
     "dev:site": "npm run dev -w 2-user-report-site",
     "cv:demo": "cd 3-auto-cv && python -m vision_service --source ../demo-assets/plumbing_test.mp4 --zones plumbing_zones.yaml --vehicle-classes bus --gap-px 100 --sink firestore --auto-report",
     "cv:webcam": "cd 3-auto-cv && python -m vision_service --source 0 --zones webcam_zones.yaml --sink firestore --auto-report",
-    "cv:webcam:review": "cd 3-auto-cv && python -m vision_service --source 0 --zones webcam_zones.yaml --sink firestore"
+    "cv:webcam:review": "cd 3-auto-cv && python -m vision_service --source 0 --zones webcam_zones.yaml --sink firestore",
+    "seed": "python -m backend.app.seed",
+    "e2e": "python scripts/e2e/ui_flow.py",
+    "api": "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

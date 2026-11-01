@@ -7,7 +7,7 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/**',
-      'functions/lib/**',
+      'legacy-firebase/**',
       '**/node_modules/**',
       '3-auto-cv/**',
       '.emulator-data/**',
@@ -26,7 +26,7 @@ export default tseslint.config(
     languageOptions: { globals: globals.serviceworker },
   },
   {
-    files: ['functions/**/*.ts', 'scripts/**/*.{ts,mjs}'],
+    files: ['scripts/**/*.mjs'],
     languageOptions: { globals: globals.node },
   },
 );
