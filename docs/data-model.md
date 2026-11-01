@@ -1,5 +1,8 @@
 # Data model — Firestore + Storage (M1, APPROVED with additions A–F)
 
+> **Note (2026-11-01):** the backend was switched from Firebase to a central FastAPI + SQLite service. Sections that mention Firestore, Cloud Functions, emulators or Firebase describe the archived first version (`legacy-firebase/`); the current design is in [docs/architecture.md](architecture.md) and [README.md](../README.md).
+
+
 Single plant ("Demo Plant — Line 3", fictional), so no plant-id prefix. Project id `demo-plant-line3`. Timestamps are Firestore `Timestamp`.
 **W** = who writes: `client` (rules-validated), `fn` (Cloud Function, admin SDK), `vision` (Python service, admin SDK), `seed`.
 

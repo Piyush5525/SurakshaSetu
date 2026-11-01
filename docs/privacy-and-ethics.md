@@ -1,5 +1,8 @@
 # Privacy and ethics
 
+> **Note (2026-11-01):** the backend was switched from Firebase to a central FastAPI + SQLite service. Sections that mention Firestore, Cloud Functions, emulators or Firebase describe the archived first version (`legacy-firebase/`); the current design is in [docs/architecture.md](architecture.md) and [README.md](../README.md).
+
+
 Principle: people will only report, and accept a camera on the line, if they trust that the system cannot be used against them. Privacy is a prerequisite,
 not a feature (CONTEXT §4.5, privacy-preserving CV case studies).
 

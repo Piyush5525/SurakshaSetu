@@ -1,5 +1,8 @@
 # PLAN — Safer Work, Better Work ("Scan · Speak · See")
 
+> **Note (2026-11-01):** the backend was switched from Firebase to a central FastAPI + SQLite service. Sections that mention Firestore, Cloud Functions, emulators or Firebase describe the archived first version (`legacy-firebase/`); the current design is in [docs/architecture.md](docs/architecture.md) and [README.md](README.md).
+
+
 Status: M0–M7 built (see decisions). Remaining risk: no real footage, no measured accuracy. Deadline: **unknown** (placeholder not filled in). Estimates are focused builder-hours for one main builder; others handle docs/pitch in parallel.
 Defaults assumed: English + Hindi, emulators only (no billing), demo footage TBD.
 
