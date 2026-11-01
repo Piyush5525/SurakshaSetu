@@ -16,8 +16,6 @@
   <img alt="Tests" src="https://img.shields.io/badge/tests-32%20API%20%C2%B7%2040%20vision%20%C2%B7%20browser%20E2E-15803d">
 </p>
 
-> **Honest by design.** This is a hackathon prototype on a **fictional plant ("Demo Plant — Line 3")**. It is not an official L'Oréal product, uses no L'Oréal logos, and contains no real L'Oréal incident data. Anything simulated is labelled _Simulated_ in the UI and in [docs/limitations.md](docs/limitations.md). Alerts are simulated until you switch them on. There is **no** police or ambulance integration.
-
 ---
 
 ## Contents
