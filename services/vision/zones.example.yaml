@@ -1,0 +1,12 @@
+# Zones are polygons in VIDEO PIXEL coordinates of your camera view. Draw them for YOUR footage:
+#   python -m vision_service.draw_zones --source demo.mp4   (click points, press S to print YAML)
+# types: forklift_lane | machine_danger | ppe_required (ppe_required is Phase 2, unused by the MVP rules)
+zones:
+  - id: forklift-lane-1
+    type: forklift_lane
+    location_id: forklift-lane
+    polygon: [[0, 300], [1280, 300], [1280, 720], [0, 720]]
+  - id: filler-danger-1
+    type: machine_danger
+    location_id: filler
+    polygon: [[400, 200], [700, 200], [700, 450], [400, 450]]

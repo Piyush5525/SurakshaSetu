@@ -1,0 +1,12 @@
+# Python 3.11+ (tested on 3.12). Licences: ultralytics AGPL-3.0; supervision MIT; opencv Apache-2.0;
+# firebase-admin Apache-2.0 (brings google-cloud-firestore/storage).
+ultralytics>=8.3
+supervision>=0.25
+opencv-python-headless>=4.9
+numpy
+pyyaml
+python-dotenv
+firebase-admin>=6
+# dev
+pytest
+ruff

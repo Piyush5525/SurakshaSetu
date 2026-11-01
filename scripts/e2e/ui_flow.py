@@ -101,6 +101,21 @@ with sync_playwright() as p:
     s.wait_for_timeout(1500)
     print("PASS action moved to in progress with public fix text")
 
+    # Camera events: a pixelated snapshot is shown; confirming creates a triaged camera report.
+    s.get_by_role("link", name="Camera events").click()
+    snap = s.get_by_alt_text("Pixelated snapshot (people blurred)").first
+    try:
+        snap.wait_for(timeout=10000)
+        s.screenshot(path=str(OUT / "6-camera-events.png"), full_page=True)
+        print("PASS camera event shows pixelated snapshot")
+    except Exception:
+        print("SKIP no camera snapshot found (run the vision service first)")
+    s.get_by_role("button", name="Confirm: real near miss").first.click()
+    s.wait_for_timeout(2500)
+    s.get_by_role("button", name="confirmed").click()
+    expect(s.get_by_text("→ report cam_").first).to_be_visible(timeout=15000)
+    print("PASS confirming a camera event creates a camera report")
+
     board = browser.new_context(viewport={"width": 1920, "height": 1080}).new_page()
     board.on("pageerror", lambda e: errors.append(str(e)))
     board.goto(f"{BASE}/board")

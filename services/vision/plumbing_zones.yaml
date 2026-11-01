@@ -1,0 +1,5 @@
+zones:
+  - id: plumbing-danger-1
+    type: machine_danger
+    location_id: filler
+    polygon: [[89, 505], [209, 505], [209, 625], [89, 625]]
