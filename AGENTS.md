@@ -26,7 +26,7 @@ Deliverables are graded too: `docs/risk-analysis.md`, `implementation-plan.md`, 
 ## Hard rules
 - **Privacy:** anonymous reports by default; never store faces; pixelate people in any saved image; no per-person scoring, ranking or leaderboards; aggregate by zone and shift.
 - **Honesty:** label anything simulated (dispatch, machine "running" signal, savings estimates, demo accuracy) as simulated/estimated in UI and docs. Never claim real police/ambulance integration. Never invent statistics: every number cites a source or is flagged as an assumption.
-- **Branding:** fictional "Demo Plant — Line 3". No L'Oréal logos or marks.
+- **Branding:** fictional "Demo Plant — Line 3". No L'Oréal logos, wordmark artwork or official colours. The product title "L'ORÉAL Industrial Safety Operations Centre" is plain text (the owner asked for it); every portal and sticker says it is a hackathon prototype, not an official L'Oréal product.
 - **Licences:** Ultralytics is AGPL-3.0 (fine for the demo; note in docs). SH17 is CC BY-NC-SA. State the licence before downloading any model or dataset.
 - **Models:** confirm class names by loading each model and printing `model.names` before writing rules. Hugging Face models were not verified; fall back to COCO `truck` for forklifts if needed and document it.
 - **Camera rules (MVP):** (1) forklift-person near-miss measured between box edges, debounced into episodes; (2) wrist keypoint inside a machine danger zone while the machine is flagged running, sustained for N seconds. Favour precision; every auto-detected event needs human confirm/dismiss.

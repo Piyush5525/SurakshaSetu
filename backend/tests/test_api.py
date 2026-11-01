@@ -275,3 +275,55 @@ def test_detector_load_status_is_reported_by_worker(client, admin):
     d = {x["name"]: x for x in client.get("/api/detectors", headers=admin).json()}
     assert d["forklift_person"]["load_status"]["cam-aisle"] == "ready"
     assert d["fall"]["load_status"]["cam-aisle"].startswith("unavailable")
+
+
+def test_dashboard_analytics_and_new_endpoints(client, admin):
+    d = client.get("/api/analytics/dashboard?days=30", headers=admin)
+    assert d.status_code == 200, d.text
+    j = d.json()
+    assert {"total", "active", "critical", "awaiting_ack", "resolved", "cameras_total", "ai_today", "qr_reports"} <= set(j["kpi"])
+    assert set(j["kpi"]) <= set(j["kpi"]) and "total" in j["definitions"] and "avg_response_min" in j["definitions"]
+    assert j["by_category"] and j["recent_incidents"] and "investigation" in j and "dept_perf" in j
+    assert client.get("/api/responders/workload", headers=admin).json()[0]["open"] >= 0
+    assert any(x["name"] == "EHS" for x in client.get("/api/departments", headers=admin).json())
+    assert client.post("/api/departments", json={"name": "Facilities"}, headers=admin).status_code == 200
+    assert client.post("/api/departments", json={"name": "Facilities"}, headers=admin).status_code == 409
+    items = client.get("/api/incidents?limit=5", headers=admin).json()["items"]
+    assert "thumb_url" in items[0]
+    f = client.get("/api/public/facts").json()
+    assert f["facts"] and all(x["source_url"].startswith("https://") for x in f["facts"]) and f["not_verified"]
+    assert client.get("/api/public/help").json()["site"].startswith("Demo Plant")
+
+
+def test_qr_scans_are_logged_and_stickers_render(client, admin):
+    tok = _token_for(client, admin, "packing")
+    client.get(f"/api/public/qr/{tok}")
+    a = [x for x in client.get("/api/assets", headers=admin).json() if x["id"] == "packing"][0]
+    assert a["scan_count"] >= 1 and a["last_scanned_at"]
+    png = client.get("/api/assets/packing/sticker.png?template=machinery", headers=admin)
+    assert png.content[:4] == b"\x89PNG" and len(png.content) > 20000
+    assert client.get("/api/assets/packing/sticker.png?template=nonsense", headers=admin).status_code == 422
+    assert client.get("/api/assets/stickers.pdf?template=laboratory&ids=packing", headers=admin).content[:4] == b"%PDF"
+    client.patch("/api/assets/packing", json={"qr_active": False}, headers=admin)
+    assert client.get(f"/api/public/qr/{tok}").status_code == 410
+    assert client.post("/api/public/reports", data={"qr_token": tok, "category": "other", "description": "x"}).status_code == 410
+    assert any(s["outcome"] == "disabled" for s in client.get("/api/assets/packing/scans", headers=admin).json()["scans"])
+    client.patch("/api/assets/packing", json={"qr_active": True}, headers=admin)
+
+
+def test_incident_filters_for_click_through(client, admin):
+    a = client.get("/api/incidents?critical_only=true&open_only=true", headers=admin).json()
+    assert all(i["severity"] >= 4 for i in a["items"])
+    b = client.get("/api/incidents?awaiting_ack=true", headers=admin).json()
+    assert all(i["status"] in ("reported", "analysed", "alerted", "escalated") for i in b["items"])
+    assert client.get("/api/incidents?date_from=2999-01-01", headers=admin).json()["total"] == 0
+
+
+def test_qr_lookup_is_never_cached(client, admin):
+    tok = _token_for(client, admin, "lab")
+    assert client.get(f"/api/public/qr/{tok}").headers["cache-control"] == "no-store"
+    client.patch("/api/assets/lab", json={"qr_active": False}, headers=admin)
+    r = client.get(f"/api/public/qr/{tok}")
+    assert r.status_code == 410 and r.headers["cache-control"] == "no-store"
+    client.patch("/api/assets/lab", json={"qr_active": True}, headers=admin)
+    assert client.get(f"/api/public/qr/{tok}").status_code == 200

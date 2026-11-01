@@ -33,7 +33,16 @@ from .zones import CameraConfig, load_camera_config, parse_camera_config
 
 ROOT = Path(__file__).resolve().parent.parent
 CLIP_BEFORE_S, CLIP_AFTER_S = 4.0, 3.0
-PREVIEW_EVERY_S = 1.0
+PREVIEW_EVERY_S = 0.12  # about 8 preview frames per second
+MARK_S = 2.5  # how long a detection box stays on the preview
+AMBER, RED, GREY = (0, 170, 255), (46, 16, 200), (150, 150, 150)  # BGR
+
+LABEL = {
+    'fire': 'FIRE', 'fall': 'PERSON FALL', 'violence': 'POSSIBLE VIOLENCE', 'machinery_proximity': 'MACHINERY DANGER ZONE',
+    'hand_in_zone': 'HAND IN DANGER ZONE', 'spill': 'LEAK', 'storage_instability': 'UNSTABLE STORAGE',
+    'forklift_person': 'FORKLIFT PROXIMITY', 'package_damage': 'PACKAGE DAMAGE', 'waste': 'WASTE DISPOSAL', 'ppe': 'MISSING PPE',
+    'blocked_aisle': 'BLOCKED AISLE',
+}
 
 
 class StillCap:
@@ -122,7 +131,9 @@ class CameraRunner(threading.Thread):
         self.cool: dict[tuple[str, str], float] = {}
         self.ring: deque[tuple[float, np.ndarray, list[tuple[float, float, float, float]]]] = deque()
         self.pending: list[dict[str, Any]] = []
+        self.marks: list[dict[str, Any]] = []  # boxes drawn on the preview: potential (amber) then confirmed (red)
         self.posted = 0
+        self._frame_w = 640
 
     # -- helpers ---------------------------------------------------------------------------------------------
     def _open(self) -> cv2.VideoCapture | StillCap:
@@ -161,6 +172,33 @@ class CameraRunner(threading.Thread):
             return data if 0 < len(data) < 55 * 1024 * 1024 else None
         finally:
             Path(path).unlink(missing_ok=True)
+
+    def _mark(self, c: P.Candidate, confirmed: bool, k: float) -> None:
+        label = f"{'CONFIRMED' if confirmed else 'POTENTIAL'} {LABEL.get(c.detector, c.detector.upper())} {round(c.confidence * 100)}%"
+        self.marks = [m for m in self.marks if not (m["det"] == c.detector and m["cls"] == c.cls and not confirmed)]
+        self.marks.append({"det": c.detector, "cls": c.cls, "until": time.monotonic() + MARK_S, "label": label,
+                           "color": RED if confirmed else AMBER, "boxes": [tuple(v * k for v in b) for b in c.boxes]})
+
+    def _draw(self, img: Any) -> Any:
+        """Zones (thin grey) and detections (amber potential, red confirmed) drawn on the pixelated preview."""
+        out = img.copy()
+        kz = out.shape[1] / self._frame_w
+        for z in self.zones:
+            pts = np.array([(int(x * kz), int(y * kz)) for x, y in z.polygon], dtype=np.int32)
+            cv2.polylines(out, [pts], True, GREY, 1, cv2.LINE_AA)
+            cv2.putText(out, z.type, (int(pts[0][0]) + 3, int(pts[0][1]) + 12), cv2.FONT_HERSHEY_SIMPLEX, 0.38, GREY, 1, cv2.LINE_AA)
+        now = time.monotonic()
+        self.marks = [m for m in self.marks if m["until"] > now]
+        row = 0
+        for m in self.marks:
+            for b in m["boxes"]:
+                cv2.rectangle(out, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), m["color"], 2)
+            (tw, th), _ = cv2.getTextSize(m["label"], cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            y = 8 + row * (th + 10)
+            cv2.rectangle(out, (6, y), (6 + tw + 10, y + th + 8), m["color"], -1)
+            cv2.putText(out, m["label"], (11, y + th + 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+            row += 1
+        return out
 
     def _finish(self, ev: dict[str, Any], t_now: float) -> None:
         clip = self._clip(ev["t"] - CLIP_BEFORE_S, t_now)
@@ -218,6 +256,7 @@ class CameraRunner(threading.Thread):
             n_proc += 1
             people, vehicles = self.shared.prepass(frame)
             pboxes = [p.box for p in people]
+            self._frame_w = frame.shape[1]
             ctx = P.FrameCtx(frame, t, datetime.now(), people, vehicles, self.zones, self.machine.running(t), self.cam["id"], self.cfg)
             small = frame if frame.shape[1] <= 640 else cv2.resize(frame, (640, int(frame.shape[0] * 640 / frame.shape[1])))
             k = small.shape[1] / frame.shape[1]
@@ -241,6 +280,7 @@ class CameraRunner(threading.Thread):
                     min_conf = cfg.get("min_conf")
                     if min_conf and c.confidence < min_conf:
                         continue
+                    self._mark(c, False, k)
                     key = (c.detector, c.cls)
                     seen_keys.add(key)
                     n = cfg.get("confirm_n") or c.confirm_n
@@ -248,6 +288,7 @@ class CameraRunner(threading.Thread):
                     ok_ev = True if c.already_confirmed else self.conf.setdefault(key, Confirmer()).update(True, n, m)
                     if ok_ev and t - self.cool.get(key, -1e9) > self.args.cooldown:
                         self.cool[key] = t
+                        self._mark(c, True, k)
                         jpeg = pixelated_jpeg(frame, pboxes, highlight=c.boxes)
                         self.pending.append({"t": t, "cand": c, "jpeg": jpeg, "due": t + CLIP_AFTER_S})
             for key, cf in self.conf.items():
@@ -261,12 +302,13 @@ class CameraRunner(threading.Thread):
             if now - last_prev >= PREVIEW_EVERY_S:
                 last_prev = now
                 shown = small if self.args.clear_preview else pixelate(small, [tuple(v * k for v in b) for b in pboxes])  # type: ignore[misc]
+                shown = self._draw(shown)
                 okj, buf = cv2.imencode(".jpg", shown, [cv2.IMWRITE_JPEG_QUALITY, 55])
                 if okj:
                     self.client.preview(self.cam["id"], buf.tobytes())
             if now - last_hb >= 5:
                 last_hb = now
-                self.client.heartbeat(self.cam["id"], "running", n_proc / max(0.1, now - t0_proc))
+                self.client.heartbeat(self.cam["id"], "running", n_proc / max(0.1, now - t0_proc), "file" if is_file else "live")
         for ev in self.pending:  # flush events whose clip window was cut short by the end of a file
             self._finish(ev, ev["t"] + CLIP_AFTER_S)
         time.sleep(1.0)  # let posting threads finish

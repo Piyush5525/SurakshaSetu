@@ -15,11 +15,13 @@ class BackendClient:
         self.api = api.rstrip("/").replace("//localhost", "//127.0.0.1")  # avoid slow IPv6-first lookups on Windows
         self.h = {"X-Worker-Key": key}
         self.s = requests.Session()
-        self._busy = threading.Lock()  # at most one background preview/heartbeat call at a time
+        self._locks: dict[str, threading.Lock] = {}  # one in-flight call per camera and purpose
 
-    def _bg(self, fn) -> None:
-        """Fire-and-forget so a slow network never stalls frame processing; skipped while one is in flight."""
-        if not self._busy.acquire(blocking=False):
+    def _bg(self, key: str, fn) -> None:
+        """Fire-and-forget so a slow network never stalls frame processing. At most one call per `key`
+        (camera + purpose) is in flight, so frequent previews can never starve a heartbeat."""
+        lock = self._locks.setdefault(key, threading.Lock())
+        if not lock.acquire(blocking=False):
             return
 
         def run() -> None:
@@ -28,7 +30,7 @@ class BackendClient:
             except requests.RequestException:
                 pass
             finally:
-                self._busy.release()
+                lock.release()
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -37,11 +39,11 @@ class BackendClient:
         r.raise_for_status()
         return r.json()
 
-    def heartbeat(self, camera_id: str, status: str, fps: float | None) -> None:
+    def heartbeat(self, camera_id: str, status: str, fps: float | None, mode: str = "live") -> None:
         def go() -> None:
             self.s.post(
                 f"{self.api}/worker/heartbeat",
-                json={"camera_id": camera_id, "status": status, "fps": fps},
+                json={"camera_id": camera_id, "status": status, "fps": fps, "mode": mode},
                 headers=self.h,
                 timeout=5,
             )
@@ -49,7 +51,7 @@ class BackendClient:
         if status in ("stopped", "error"):
             go()  # final states are sent synchronously
         else:
-            self._bg(go)
+            self._bg(f"hb:{camera_id}", go)
 
     def detector_status(self, camera_id: str, statuses: dict[str, str]) -> None:
         try:
@@ -66,7 +68,7 @@ class BackendClient:
                 timeout=5,
             )
 
-        self._bg(go)
+        self._bg(f"pv:{camera_id}", go)
 
     def detection(
         self,

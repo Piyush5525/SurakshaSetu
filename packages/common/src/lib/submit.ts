@@ -76,6 +76,20 @@ export function startQueueWatcher(): void {
   void flushQueue();
 }
 
+const MANUAL = 'sw.manual';
+function manualTracks(): { id: string; code: string }[] {
+  try {
+    return JSON.parse(localStorage.getItem(MANUAL) ?? '[]') as { id: string; code: string }[];
+  } catch {
+    return [];
+  }
+}
+/** A report found by reference number + access code is remembered on this device. */
+export function saveManualTrack(id: string, code: string): void {
+  const rest = manualTracks().filter((p) => p.id !== id);
+  localStorage.setItem(MANUAL, JSON.stringify([{ id, code }, ...rest].slice(0, 20)));
+}
+
 export interface Tracked {
   id: string;
   category_label: string;
@@ -104,10 +118,12 @@ export function useMyReports(pollMs = 10000): {
       if (!alive) return;
       setWaiting(all.filter((x) => x.state === 'waiting'));
       const sent = all.filter((x) => x.state === 'sent' && x.serverId && x.trackingCode);
-      if (!sent.length) return setItems([]);
+      const pairs = [...sent.map((s) => ({ id: s.serverId as string, code: s.trackingCode as string })), ...manualTracks()];
+      const uniq = [...new Map(pairs.map((p) => [p.id, p])).values()];
+      if (!uniq.length) return setItems([]);
       try {
         const res = await api<Tracked[]>('/public/track', {
-          json: sent.map((s) => ({ id: s.serverId, code: s.trackingCode })),
+          json: uniq,
           authed: false,
         });
         if (alive) setItems(res.sort((a, b) => b.created_at.localeCompare(a.created_at)));

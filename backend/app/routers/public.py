@@ -21,6 +21,22 @@ HAZARD_TO_CATEGORY = {
 }
 
 
+@router.get("/help")
+def help_info() -> dict:
+    """Emergency page details. Nothing here places a call; the contact is only displayed if the plant set one."""
+    from ..config import settings
+
+    return {"site": "Demo Plant — Line 3", "contact": settings.SITE_EMERGENCY_CONTACT, "assembly_point": settings.ASSEMBLY_POINT}
+
+
+@router.get("/facts")
+def facts() -> dict:
+    """Verified public L'Oréal information with sources. Not internal data; see facts.py for the integrity rules."""
+    from ..facts import FACTS, NOT_VERIFIED, RETRIEVED
+
+    return {"retrieved": RETRIEVED, "facts": FACTS, "not_verified": NOT_VERIFIED}
+
+
 @router.get("/categories")
 def categories() -> list[dict]:
     from ..domain import AI_COVERAGE

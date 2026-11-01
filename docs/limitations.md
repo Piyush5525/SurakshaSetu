@@ -50,3 +50,12 @@ An honest list of what is simulated, assumed or unvalidated. If a claim is not h
 ## Eligibility and scope
 
 The competition lists mechanical, chemical, electrical, food-tech, metallurgy and production disciplines. This team is software and communications heavy; confirm eligibility with the organisers and consider a mechanical/production teammate to validate the risk analysis. No judging weights or dates were found publicly; we invent none.
+
+## UI and demo experience
+- **No continuous recording.** The CCTV timeline shows event markers and plays the short clip stored for each event; there is no recorded footage to scrub between events.
+- **Camera feeds in the demo are sample videos** run through the real pipeline and labelled "SAMPLE VIDEO · SIMULATED FEED". "LIVE" is shown only for a real device (webcam/RTSP). Overlays are drawn by the worker onto the pixelated preview (amber potential, red confirmed); RTSP cameras were not tested.
+- **Zone editor is a JSON box**, not a drawing tool; polygons come from `python -m vision_service.draw_zones`.
+- **Tracking is per app.** A report made through the QR app is tracked in the QR app on that phone (or anywhere with the reference number and access code); the worker portal is a different browser origin with its own storage.
+- **Public L'Oréal figures** (Settings → Public data) were read from search excerpts of the 2025 Universal Registration Document because the page text could not be fetched; each is flagged with how it was checked. The total factory count and ISO 45001 coverage could not be corroborated and are not shown. No real L'Oréal incident is used or implied.
+- **Analytics are only as good as the data:** most incidents in a fresh demo are synthetic (flagged, and the Overview says what share). Averages mix synthetic and test records.
+- **Not tested** on screen readers, on iOS Safari, or at tablet breakpoints beyond a quick visual check; contrast follows the token palette but was not audited with a tool.

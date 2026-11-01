@@ -116,6 +116,11 @@ def dispatch_alert(inc: dict, level: int = 0) -> list[dict]:
     """Notify the responsible department(s). Level 0 = first alert, >=1 = escalation (manager + call)."""
     text = build_message(inc, level)
     out: list[dict] = []
+    route = db.one("SELECT min_severity, call_min_severity FROM routing WHERE category=?", (inc["category"],)) or {}
+    min_sev, call_min = route.get("min_severity", 1), route.get("call_min_severity", 4)
+    if level == 0 and inc["severity"] < min_sev:
+        _log(inc["id"], "telegram", "-", "skipped", f"severity {inc['severity']} below routing threshold {min_sev}", 0, False)
+        return out
     depts = [d for d in [inc.get("department"), _secondary(inc)] if d]
     chats: list[str | None] = []
     for d in depts:
@@ -128,7 +133,7 @@ def dispatch_alert(inc: dict, level: int = 0) -> list[dict]:
     for c in chats:
         out.append(send_telegram(inc["id"], text, c, level))
     # Voice call only for critical incidents or escalations.
-    if inc["severity"] >= 4 or level >= 1:
+    if inc["severity"] >= call_min or level >= 1:
         out.append(place_call(inc["id"], text, None, level))
     return out
 

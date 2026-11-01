@@ -1,36 +1,44 @@
+import { Languages } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toggleLanguage } from '../i18n';
 
-/** Common frame for worker pages: high contrast, big targets, language toggle. */
-export function Shell({ children, back }: { children: ReactNode; back?: string }) {
+/** Frame for the worker and QR experiences: light, high contrast, large targets, one clear way back home. */
+export function Shell({
+  children,
+  back,
+  wide = false,
+}: {
+  children: ReactNode;
+  back?: string;
+  wide?: boolean;
+}) {
   const { t } = useTranslation();
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-slate-700 bg-slate-900 px-4 py-3">
-        <div className="min-w-0">
-          <Link to={back ?? '/'} className="block truncate text-lg font-extrabold text-yellow-300">
-            {t('app.name')}
-          </Link>
-          <p className="truncate text-xs text-slate-300">{t('app.plant')}</p>
-        </div>
-        <div className="flex gap-2">
-          <Link
-            to="/board"
-            className="rounded-lg border border-slate-500 px-3 py-2 text-sm font-semibold"
-          >
-            {t('common.board')}
+    <div className="min-h-screen bg-canvas text-ink">
+      <header className="sticky top-0 z-10 border-b border-line bg-surface">
+        <div
+          className={`mx-auto flex items-center justify-between gap-3 px-4 py-3 ${wide ? 'max-w-3xl' : 'max-w-xl'}`}
+        >
+          <Link to={back ?? '/'} className="min-w-0">
+            <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-brand">
+              Safer Work
+            </span>
+            <span className="block truncate text-base font-semibold">{t('app.plant')}</span>
           </Link>
           <button
             onClick={toggleLanguage}
-            className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-bold"
+            className="flex h-11 items-center gap-2 rounded-md border border-line-strong px-3 text-base font-semibold hover:bg-sunken"
+            aria-label="Change language"
           >
-            {t('common.language')}
+            <Languages size={18} /> {t('common.language')}
           </button>
         </div>
       </header>
-      <main className="mx-auto max-w-md px-4 pb-10 pt-4">{children}</main>
+      <main className={`mx-auto px-4 pb-12 pt-6 ${wide ? 'max-w-3xl' : 'max-w-xl'}`}>
+        {children}
+      </main>
     </div>
   );
 }

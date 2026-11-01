@@ -52,6 +52,7 @@ export async function api<T>(
     method: opts.method ?? (body ? 'POST' : 'GET'),
     headers,
     body,
+    cache: 'no-store',
   });
   if (res.status === 401 && t) auth.clear();
   return (await parse(res)) as T;

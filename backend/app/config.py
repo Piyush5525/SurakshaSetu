@@ -35,6 +35,8 @@ class Settings:
         "CORS_REGEX",
         r"https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?",
     )
+    SITE_EMERGENCY_CONTACT = os.getenv("SITE_EMERGENCY_CONTACT", "")  # shown on the worker help page; a call link only if set
+    ASSEMBLY_POINT = os.getenv("ASSEMBLY_POINT", "")
     PUBLIC_URL = os.getenv("PUBLIC_URL", "http://localhost:5173")  # admin dashboard links in alerts
     QR_BASE_URL = os.getenv("QR_BASE_URL", "http://localhost:5174")  # what a QR sticker opens (the sticker app)
     # Notifications

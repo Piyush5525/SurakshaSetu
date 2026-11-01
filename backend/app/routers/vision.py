@@ -27,8 +27,21 @@ def _cam(c: dict) -> dict:
     c["online"] = bool(seen) and (time.time() - _ts(seen)) < 20
     if not c["online"] and c["status"] == "running":
         c["status"] = "offline"
-    c["preview_url"] = f"/api/cameras/{c['id']}/frame?{sign_evidence('cam:' + c['id'], 300)}"
+    c["preview_url"] = f"/api/cameras/{c['id']}/frame?{sign_evidence('cam:' + c['id'], 3600)}"
+    c["stream_url"] = f"/api/cameras/{c['id']}/stream.mjpg?{sign_evidence('cam:' + c['id'], 3600)}"
     c.pop("source", None)  # may embed credentials (rtsp://user:pass@...): never sent to the browser
+    st = db.one(
+        """SELECT COUNT(*) AS n,
+        SUM(CASE WHEN status IN ('reported','analysed','alerted','escalated','acknowledged','assigned','in_progress') THEN 1 ELSE 0 END) AS active
+        FROM incidents WHERE camera_id=? OR audio_id=?""",
+        (c["id"], c["id"]),
+    ) or {}
+    c["incidents_total"], c["active_alerts"] = st.get("n") or 0, st.get("active") or 0
+    last = db.one("SELECT id, ai_class, ai_confidence, status, severity, created_at, simulated FROM incidents WHERE camera_id=? OR audio_id=? ORDER BY created_at DESC LIMIT 1", (c["id"], c["id"]))
+    c["last_detection"] = last
+    asset = db.one("SELECT name, department FROM assets WHERE id=?", (c.get("asset_id"),)) if c.get("asset_id") else None
+    c["asset_name"], c["department"] = (asset or {}).get("name"), (asset or {}).get("department")
+    c["detectors"] = c["detectors"]
     return c
 
 
@@ -151,6 +164,31 @@ def patch_camera(cid: str, body: CameraPatch, user: dict = Depends(require("admi
     return {"ok": True}
 
 
+@router.get("/cameras/{cid}/stream.mjpg")
+async def camera_stream(cid: str, request: Request, exp: int, sig: str):
+    """Motion-JPEG built from the worker's latest preview frames (people are pixelated by the worker)."""
+    import asyncio
+
+    from fastapi.responses import StreamingResponse
+
+    if not verify_evidence_sig("cam:" + cid, exp, sig):
+        raise HTTPException(403)
+
+    async def gen():
+        last_ts = 0.0
+        idle = 0
+        while idle < 600 and not await request.is_disconnected():
+            got = _preview.get(cid)
+            if got and got[0] != last_ts:
+                last_ts, idle = got[0], 0
+                yield b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: " + str(len(got[1])).encode() + b"\r\n\r\n" + got[1] + b"\r\n"
+            else:
+                idle += 1
+            await asyncio.sleep(0.1)
+
+    return StreamingResponse(gen(), media_type="multipart/x-mixed-replace; boundary=frame", headers={"Cache-Control": "no-store"})
+
+
 @router.get("/cameras/{cid}/frame")
 def camera_frame(cid: str, exp: int, sig: str) -> Response:
     if not verify_evidence_sig("cam:" + cid, exp, sig):
@@ -237,8 +275,8 @@ def put_camera_config(cid: str, cfg: dict = Body(...), user: dict = Depends(requ
 
 
 @router.post("/worker/heartbeat", dependencies=[Depends(worker_key)])
-def heartbeat(camera_id: str = Body(...), status: str = Body("running"), fps: float | None = Body(None)) -> dict:
-    db.run("UPDATE cameras SET status=?, last_seen=?, fps=? WHERE id=?", (status, now_iso(), fps, camera_id))
+def heartbeat(camera_id: str = Body(...), status: str = Body("running"), fps: float | None = Body(None), mode: str = Body("live")) -> dict:
+    db.run("UPDATE cameras SET status=?, last_seen=?, fps=?, feed_mode=? WHERE id=?", (status, now_iso(), fps, mode if mode in ("live", "file") else "live", camera_id))
     realtime.publish("camera", {"camera_id": camera_id, "status": status})
     return {"ok": True}
 

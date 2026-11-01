@@ -23,3 +23,8 @@ legacy-firebase/**/lib/
 
 demo-assets/samples/
 3-auto-cv/models/third_party/*/*.pt
+
+demo-assets/shots/
+demo-assets/e2e/
+demo-assets/*.png
+demo-assets/samples/

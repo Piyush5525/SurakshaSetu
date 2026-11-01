@@ -1,13 +1,15 @@
-# Safer Work, Better Work: Scan · Speak · See
+# L'ORÉAL Industrial Safety Operations Centre (hackathon prototype)
 
-One incident platform for a (fictional) cosmetics plant, **Demo Plant — Line 3**. Three ways in, one central backend, one incident database:
+_Scan · Speak · See._ One incident platform for a fictional cosmetics plant, **Demo Plant — Line 3**. It is a hackathon prototype: **not an official L'Oréal product**, no L'Oréal logos or marks, and no real L'Oréal incident data. Three ways in, one central backend, one incident database:
 
-| # | Folder | Port | What it is |
-|---|---|---|---|
-| 1 | `1-sticker-app` | 5174 | **QR sticker reporting.** A sticker on each machine opens a one-screen form for _that_ machine (no login, EN/HI, photo/video/voice, offline queue). |
-| 2 | `2-user-report-site` | 5173 | **Worker portal** (report from anywhere, track status, "You said, we did" board) and the **admin control centre** at `/admin` (live monitoring, incidents, map, QR management, alerts, analytics). |
-| 3 | `3-auto-cv` | worker | **Camera/CV worker.** Runs detector plugins on cameras, video files or a webcam and posts confirmed, pixelated events to the backend. |
-| – | `backend` | 8000 | **Central FastAPI backend** (SQLite): incidents, workflow, roles, evidence, Telegram/voice alerts, escalation, analytics, WebSocket. API docs at `/api/docs`. |
+| #   | Folder               | Port   | Experience                                                                                                                                                                                       |
+| --- | -------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `1-sticker-app`      | 5174   | **QR reporting.** A sticker on each machine opens a 3-step report with the machine already filled in. No login, English/Hindi, photo/video/voice, offline queue, access code for tracking.        |
+| 2   | `2-user-report-site`  | 5173   | **Worker portal** (report in 5 guided steps, track by plain-language progress, emergency guidance, public "You said, we did" board) and the **Control Centre** at `/admin` (12 sections, below). |
+| 3   | `3-auto-cv`          | worker | **Camera/CV worker.** Nine detector capabilities on cameras, video files or a webcam; confirmed, pixelated events go to the backend.                                                              |
+| –   | `backend`            | 8000   | **Central FastAPI backend** (SQLite): incidents, workflow, roles, evidence, Telegram/voice alerts, escalation, analytics, WebSocket, sticker rendering. API docs at `/api/docs`.                  |
+
+**Control Centre sections:** Overview (10 defined KPIs, trend by source, severity, category, department, hotspots, click-through to filtered lists) · Live CCTV (dark workspace: grid 1/2/4/9, expanded view with filmstrip, prev/next, full screen, event timeline and event-clip playback, overlays) · AI Monitoring (evidence-frame cards, verify / false positive) · Incidents (filters saved in the URL, case management) · QR Management (4 printable sticker templates, PNG/PDF, scan history, disable/regenerate) · Factory Map · Audio Monitoring (simulated, labelled) · Responders and departments · Analytics · Investigations · Model Configuration · Settings (alert routing by category and severity, verified public data and sources).
 
 ```
 QR report / worker portal / CCTV detection / audio detection
@@ -27,6 +29,7 @@ npm run dev          # API :8000, user site :5173, sticker app :5174  (first sta
 npm run seed         # optional: 40 synthetic past incidents (flagged SAMPLE data) so analytics have content
 ```
 
+- Demo cameras (sample videos through the real pipeline, labelled "SAMPLE VIDEO · SIMULATED FEED"): in a second terminal `npm run demo:cameras`.
 - Worker portal: <http://localhost:5173> · Sticker app: <http://localhost:5174> · Public board: `/board` · API docs: <http://localhost:8000/api/docs>
 - Control centre: <http://localhost:5173/admin>. Demo accounts (local only): `admin`, `manager.ehs`, `responder.maint`, password `demo1234`.
 - **Phones:** put phone and PC on the same Wi-Fi. In **Admin → Machines & QR** set the address to your PC's Wi-Fi IP (it suggests one), then download the sticker PDF. Phones cannot open `localhost`.

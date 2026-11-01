@@ -56,6 +56,9 @@ SAMPLES = [
 
 
 def seed_basics() -> None:
+    from .services import departments
+
+    departments.seed()
     """Idempotent: staff logins, machines, cameras, responders. No incidents."""
     pw = os.getenv("DEMO_PASSWORD", "demo1234")
     for u, role, dept, name in [
@@ -90,7 +93,7 @@ def seed_samples(n: int = 40) -> int:
     """Synthetic history (flagged simulated=1) so analytics have something to show."""
     rnd = random.Random(7)
     made = 0
-    for i in range(n):
+    for _ in range(n):
         cat, text, aid, harm = rnd.choice(SAMPLES)
         inc = svc.create_incident(
             category=cat, description=text, source=rnd.choice(["qr", "portal", "qr"]), asset_id=aid, serious_harm=harm,

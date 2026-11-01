@@ -2,16 +2,17 @@
 
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .. import db
 from ..config import settings
-from ..domain import CATEGORIES, DEPARTMENTS, OPEN_STATUSES, STATUSES, now_iso
+from ..domain import CATEGORIES, OPEN_STATUSES, STATUSES, now_iso
 from ..security import require, sign_evidence, verify_evidence_sig
 from ..services import incidents as svc
 from ..services import notify, realtime
+from ..services.departments import names as department_names
 
 router = APIRouter()
 
@@ -27,14 +28,29 @@ def _visible(user: dict) -> tuple[str, list]:
 def list_incidents(
     status: str | None = None, category: str | None = None, source: str | None = None, department: str | None = None,
     severity_min: int | None = None, asset_id: str | None = None, q: str | None = None, open_only: bool = False,
+    camera_id: str | None = None, zone: str | None = None, date_from: str | None = None, date_to: str | None = None,
+    critical_only: bool = False, awaiting_ack: bool = False, simulated: bool | None = None,
     limit: int = Query(200, le=500), offset: int = 0, user: dict = Depends(require("responder")),
 ) -> dict:
     where, args = _visible(user)
     clauses = [where]
-    for col, val in (("status", status), ("category", category), ("source", source), ("department", department), ("asset_id", asset_id)):
+    for col, val in (("status", status), ("category", category), ("source", source), ("department", department), ("asset_id", asset_id), ("camera_id", camera_id), ("zone", zone)):
         if val:
             clauses.append(f"{col}=?")
             args.append(val)
+    if date_from:
+        clauses.append('created_at>=?')
+        args.append(date_from)
+    if date_to:
+        clauses.append('created_at<?')
+        args.append(date_to + 'T23:59:59' if len(date_to) == 10 else date_to)
+    if critical_only:
+        clauses.append('severity>=4')
+    if awaiting_ack:
+        clauses.append("status IN ('reported','analysed','alerted','escalated')")
+    if simulated is not None:
+        clauses.append('simulated=?')
+        args.append(int(simulated))
     if severity_min:
         clauses.append("severity>=?")
         args.append(severity_min)
@@ -46,7 +62,11 @@ def list_incidents(
     sql = " AND ".join(clauses)
     total = db.one(f"SELECT COUNT(*) n FROM incidents WHERE {sql}", args)["n"]  # type: ignore[index]
     rowsx = db.rows(f"SELECT * FROM incidents WHERE {sql} ORDER BY created_at DESC LIMIT ? OFFSET ?", [*args, limit, offset])
-    return {"total": total, "items": [svc.public_row(r) for r in rowsx]}
+    items = [svc.public_row(r) for r in rowsx]
+    for it in items:  # first image as a thumbnail (signed, short-lived), so the AI feed can show real evidence frames
+        ev = db.one("SELECT id FROM evidence WHERE incident_id=? AND kind='image' ORDER BY created_at LIMIT 1", (it["id"],))
+        it["thumb_url"] = f"/api/evidence/{ev['id']}?{sign_evidence(ev['id'])}" if ev else None
+    return {"total": total, "items": items}
 
 
 @router.get("/incidents/{iid}")
@@ -66,6 +86,7 @@ def incident_detail(iid: str, user: dict = Depends(require("responder"))) -> dic
         "history": db.rows("SELECT status,ts,actor,note FROM status_history WHERE incident_id=? ORDER BY id", (iid,)),
         "notifications": db.rows("SELECT * FROM notifications WHERE incident_id=? ORDER BY id", (iid,)),
         "responder": db.one("SELECT id,name,department FROM responders WHERE id=?", (r["assigned_responder_id"],)) if r["assigned_responder_id"] else None,
+        "reporter_name": r.get("reporter_name"),
     }
 
 
@@ -111,7 +132,7 @@ def assign(iid: str, body: AssignBody, user: dict = Depends(require("manager")))
     if not inc:
         raise HTTPException(404)
     if body.department:
-        if body.department not in DEPARTMENTS:
+        if body.department not in department_names():
             raise HTTPException(422, "unknown department")
         db.run("UPDATE incidents SET department=?, updated_at=? WHERE id=?", (body.department, now_iso(), iid))
     if body.responder_id:
@@ -204,9 +225,46 @@ def responders(department: str | None = None, _: dict = Depends(require("respond
     return db.rows(sql + (" WHERE department=?" if department else "") + " ORDER BY department,name", (department,) if department else ())
 
 
+@router.get("/responders/workload")
+def responder_workload(_: dict = Depends(require("responder"))) -> list[dict]:
+    """Per responder: open assigned incidents, total handled, mean minutes to acknowledge, resolved count."""
+    out = []
+    for r in db.rows("SELECT id,name,department,role,available FROM responders ORDER BY department,name"):
+        mine = db.rows("SELECT status,created_at,acknowledged_at,resolved_at,severity FROM incidents WHERE assigned_responder_id=?", (r["id"],))
+        ack = [m for i in mine if (m := _mins(i["created_at"], i["acknowledged_at"])) is not None]
+        esc = db.one("SELECT COUNT(*) n FROM status_history h JOIN incidents i ON i.id=h.incident_id WHERE i.assigned_responder_id=? AND h.status='escalated'", (r["id"],)) or {}
+        out.append({
+            **r,
+            "open": sum(1 for i in mine if i["status"] in OPEN_STATUSES),
+            "handled": len(mine),
+            "resolved": sum(1 for i in mine if i["status"] in ("resolved", "closed")),
+            "avg_ack_min": round(sum(ack) / len(ack), 1) if ack else None,
+            "escalations": esc.get("n") or 0,
+        })
+    return out
+
+
+@router.post("/incidents/{iid}/evidence")
+async def add_evidence(iid: str, files: list[UploadFile] = File(...), user: dict = Depends(require("responder"))) -> dict:
+    """Staff can attach more evidence to an existing incident (same type/size checks as public uploads)."""
+    from ..security import classify_upload
+
+    if not svc.get_incident(iid):
+        raise HTTPException(404)
+    n = 0
+    for f in files[:6]:
+        data = await f.read()
+        kind = classify_upload(f.filename or "file", f.content_type or "", len(data))
+        svc.save_evidence(iid, kind, f.filename or "file", data, f.content_type or "", f"added by {user['u']}")
+        n += 1
+    svc.audit(user["u"], "incident.evidence", iid, f"{n} file(s)")
+    realtime.publish("incident.updated", {"incident": svc.public_row(svc.get_incident(iid) or {})})
+    return {"added": n}
+
+
 @router.post("/responders")
 def add_responder(body: ResponderIn, user: dict = Depends(require("manager"))) -> dict:
-    if body.department not in DEPARTMENTS:
+    if body.department not in department_names():
         raise HTTPException(422, "unknown department")
     rid = db.run(
         "INSERT INTO responders(name,department,role,telegram_chat_id,phone,available) VALUES(?,?,?,?,?,?)",
@@ -226,6 +284,8 @@ def responder_available(rid: int, available: bool, user: dict = Depends(require(
 class RouteIn(BaseModel):
     department: str
     secondary: str | None = None
+    min_severity: int = Field(1, ge=1, le=5)
+    call_min_severity: int = Field(4, ge=1, le=5)
 
 
 @router.get("/routing")
@@ -240,6 +300,8 @@ def get_routing(_: dict = Depends(require("responder"))) -> list[dict]:
             "department": over[c]["department"] if c in over else DEPARTMENT_BY_CATEGORY[c],
             "secondary": over[c]["secondary"] if c in over else SECONDARY_DEPARTMENT.get(c),
             "customised": c in over,
+            "min_severity": over[c]["min_severity"] if c in over else 1,
+            "call_min_severity": over[c]["call_min_severity"] if c in over else 4,
         }
         for c in CATEGORIES
     ]
@@ -250,9 +312,9 @@ def put_routing(category: str, body: RouteIn, user: dict = Depends(require("admi
     if category not in CATEGORIES:
         raise HTTPException(404, "unknown category")
     for d in (body.department, body.secondary):
-        if d and d not in DEPARTMENTS:
+        if d and d not in department_names():
             raise HTTPException(422, f"unknown department {d}")
-    db.run("INSERT OR REPLACE INTO routing(category,department,secondary) VALUES(?,?,?)", (category, body.department, body.secondary or None))
+    db.run("INSERT OR REPLACE INTO routing(category,department,secondary,min_severity,call_min_severity) VALUES(?,?,?,?,?)", (category, body.department, body.secondary or None, body.min_severity, body.call_min_severity))
     svc.audit(user["u"], "routing.update", category, f"{body.department}/{body.secondary}")
     return {"ok": True}
 
@@ -304,6 +366,25 @@ def _mins(a: str | None, b: str | None) -> float | None:
     return (datetime.fromisoformat(b) - datetime.fromisoformat(a)).total_seconds() / 60
 
 
+def _perf(rows_: list[dict], col: str) -> list[dict]:
+    """Per group: incidents, resolved share, mean minutes to acknowledge and to resolve."""
+    groups: dict[str, list[dict]] = {}
+    for r in rows_:
+        groups.setdefault(r[col] or "unassigned", []).append(r)
+    out = []
+    for k, rs in groups.items():
+        ack = [m for r in rs if (m := _mins(r["created_at"], r["acknowledged_at"])) is not None]
+        res = [m for r in rs if (m := _mins(r["created_at"], r["resolved_at"])) is not None]
+        out.append({
+            "key": k,
+            "total": len(rs),
+            "resolved": sum(1 for r in rs if r["status"] in ("resolved", "closed")),
+            "avg_ack_min": round(sum(ack) / len(ack), 1) if ack else None,
+            "avg_resolve_min": round(sum(res) / len(res), 1) if res else None,
+        })
+    return sorted(out, key=lambda x: -x["total"])
+
+
 @router.get("/analytics")
 def analytics(days: int = 30, user: dict = Depends(require("responder"))) -> dict:
     where, args = _visible(user)
@@ -344,6 +425,93 @@ def analytics(days: int = 30, user: dict = Depends(require("responder"))) -> dic
         "false_positive_rate": round(len(fp) / len(reviewed), 3) if reviewed else None,
         "false_positive_note": "Share of reviewed AI events marked false positive. Simulated events are included only if present.",
         "simulated_count": sum(1 for r in allrows if r["simulated"]),
+    }
+
+
+@router.get("/analytics/dashboard")
+def analytics_dashboard(days: int = 30, user: dict = Depends(require("responder"))) -> dict:
+    """Everything the admin overview shows, each metric defined in `definitions` and computed from the incident table."""
+    where, args = _visible(user)
+    since = (datetime.now(UTC) - timedelta(days=days)).isoformat(timespec="seconds")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    base = f"{where} AND created_at>=?"
+    a = [*args, since]
+    rows_all = db.rows(f"SELECT * FROM incidents WHERE {base}", a)
+    open_s = OPEN_STATUSES
+    ack = [m for r in rows_all if (m := _mins(r["created_at"], r["acknowledged_at"])) is not None]
+    res = [m for r in rows_all if (m := _mins(r["created_at"], r["resolved_at"])) is not None]
+
+    def grp(col: str) -> list[dict]:
+        return db.rows(f"SELECT {col} AS key, COUNT(*) AS n FROM incidents WHERE {base} GROUP BY {col} ORDER BY n DESC", a)
+
+    cams = db.rows("SELECT id, enabled, status, last_seen, simulated, kind FROM cameras WHERE kind='camera'")
+    now = datetime.now(UTC).timestamp()
+    online = sum(1 for c in cams if c["last_seen"] and now - datetime.fromisoformat(c["last_seen"]).timestamp() < 20)
+    heat = db.rows(
+        f"""SELECT a.id, a.name, a.zone, a.x, a.y, a.w, a.h,
+        (SELECT COUNT(*) FROM incidents i WHERE i.asset_id=a.id AND i.created_at>=?) AS total,
+        (SELECT COUNT(*) FROM incidents i WHERE i.asset_id=a.id AND i.status IN ({svc.open_status_sql()})) AS open FROM assets a""",
+        (since,),
+    )
+    by_day = db.rows(f"SELECT substr(created_at,1,10) AS day, source, COUNT(*) AS n FROM incidents WHERE {base} GROUP BY day, source ORDER BY day", a)
+    resolved = [r for r in rows_all if r["status"] in ("resolved", "closed")]
+    return {
+        "days": days,
+        "kpi": {
+            "total": len(rows_all),
+            "active": sum(1 for r in rows_all if r["status"] in open_s),
+            "critical": sum(1 for r in rows_all if r["severity"] >= 4 and r["status"] in open_s),
+            "awaiting_ack": sum(1 for r in rows_all if r["status"] in ("reported", "analysed", "alerted", "escalated")),
+            "resolved": len(resolved),
+            "cameras_online": online,
+            "cameras_total": len(cams),
+            "ai_today": sum(1 for r in rows_all if r["source"] in ("cctv", "audio") and r["created_at"][:10] == today),
+            "qr_reports": sum(1 for r in rows_all if r["source"] == "qr"),
+            "avg_response_min": round(sum(ack) / len(ack), 1) if ack else None,
+            "avg_resolve_min": round(sum(res) / len(res), 1) if res else None,
+            "resolution_rate": round(len(resolved) / len(rows_all), 3) if rows_all else None,
+            "simulated_share": round(sum(1 for r in rows_all if r["simulated"]) / len(rows_all), 3) if rows_all else None,
+        },
+        "definitions": {
+            "total": "Incidents created in the selected period (all sources).",
+            "active": "Incidents not yet resolved, closed, rejected, duplicate or false positive.",
+            "critical": "Active incidents with severity 4 or 5. Severity comes from triage rules, never from AI confidence.",
+            "awaiting_ack": "Incidents alerted or escalated that nobody has acknowledged yet.",
+            "resolved": "Incidents in status resolved or closed.",
+            "cameras_online": "Cameras whose CV worker sent a heartbeat in the last 20 seconds.",
+            "ai_today": "Incidents created today by CCTV or audio detectors (potential events included).",
+            "qr_reports": "Incidents submitted by scanning a QR sticker.",
+            "avg_response_min": "Mean minutes from creation to first acknowledgement.",
+            "avg_resolve_min": "Mean minutes from creation to resolution.",
+            "resolution_rate": "Resolved or closed incidents divided by all incidents in the period.",
+        },
+        "dept_perf": _perf(rows_all, "department"),
+        "zone_perf": _perf(rows_all, "zone"),
+        "investigation": {
+            "resolved": len(resolved),
+            "with_root_cause": sum(1 for r in resolved if (r["root_cause"] or "").strip()),
+            "with_corrective": sum(1 for r in resolved if (r["corrective_action"] or "").strip()),
+            "with_preventive": sum(1 for r in resolved if (r["preventive_action"] or "").strip()),
+            "open_without_root_cause": sum(1 for r in rows_all if r["status"] in ("in_progress", "assigned", "acknowledged") and not (r["root_cause"] or "").strip()),
+            "root_causes": db.rows(
+                f"SELECT category AS key, COUNT(*) AS n FROM incidents WHERE {base} AND TRIM(COALESCE(root_cause,''))!='' GROUP BY category ORDER BY n DESC", a
+            ),
+        },
+        "by_category": grp("category"),
+        "by_department": grp("department"),
+        "by_severity": grp("severity"),
+        "by_source": grp("source"),
+        "trend": by_day,
+        "heat": heat,
+        "recent_incidents": [svc.public_row(r) for r in db.rows(f"SELECT * FROM incidents WHERE {where} ORDER BY created_at DESC LIMIT 8", args)],
+        "recent_ai": [svc.public_row(r) for r in db.rows(f"SELECT * FROM incidents WHERE {where} AND source IN ('cctv','audio') ORDER BY created_at DESC LIMIT 6", args)],
+        "pending": [
+            svc.public_row(r)
+            for r in db.rows(
+                f"SELECT * FROM incidents WHERE {where} AND status IN ('reported','analysed','alerted','escalated') ORDER BY severity DESC, created_at ASC LIMIT 6",
+                args,
+            )
+        ],
     }
 
 

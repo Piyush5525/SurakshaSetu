@@ -67,6 +67,11 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TEXT NOT NULL, acknowledged_at TEXT);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS departments (
+  name TEXT PRIMARY KEY, description TEXT DEFAULT '', active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS qr_scans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, asset_id TEXT NOT NULL, ts TEXT NOT NULL, outcome TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_scan_asset ON qr_scans(asset_id);
 CREATE TABLE IF NOT EXISTS routing (
   category TEXT PRIMARY KEY, department TEXT NOT NULL, secondary TEXT);
 CREATE TABLE IF NOT EXISTS events_raw (
@@ -103,6 +108,9 @@ def init_db() -> None:
         c.executescript(SCHEMA)
         _add_column(c, 'cameras', 'config_json', "TEXT NOT NULL DEFAULT '{}'")
         _add_column(c, 'events_raw', 'detector', 'TEXT')
+        _add_column(c, 'cameras', 'feed_mode', "TEXT NOT NULL DEFAULT 'live'")
+        _add_column(c, 'routing', 'min_severity', 'INTEGER NOT NULL DEFAULT 1')
+        _add_column(c, 'routing', 'call_min_severity', 'INTEGER NOT NULL DEFAULT 4')
 
 
 def rows(sql: str, args: tuple | list = ()) -> list[dict[str, Any]]:

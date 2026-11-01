@@ -11,12 +11,14 @@ export interface Incident {
   audio_id: string | null;
   site: string | null;
   building: string | null;
+  floor: string | null;
   zone: string | null;
   created_at: string;
   updated_at: string;
   severity: number;
   severity_reasons: string[];
   ai_model: string | null;
+  ai_model_version: string | null;
   ai_class: string | null;
   ai_confidence: number | null;
   ai_meta: Record<string, unknown> | null;
@@ -38,14 +40,14 @@ export interface Incident {
 }
 
 interface Live {
-  tick: number; // bumps on every server event: use as a refetch key
-  last: { type: string; incident?: Incident } | null;
+  tick: number;
+  last: { type: string; incident?: Incident; camera_id?: string } | null;
   connected: boolean;
 }
 const Ctx = createContext<Live>({ tick: 0, last: null, connected: false });
 export const useLive = () => useContext(Ctx);
 
-/** One WebSocket for the whole admin portal; reconnects by itself. */
+/** One WebSocket for the whole control centre. Reconnects by itself; `connected` drives the health pill. */
 export function LiveProvider({ children }: { children: ReactNode }) {
   const [s, setS] = useState<Live>({ tick: 0, last: null, connected: false });
   const stop = useRef(false);
@@ -61,7 +63,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           const m = JSON.parse(e.data as string) as Live['last'];
           setS((p) => ({ tick: p.tick + 1, last: m, connected: true }));
         } catch {
-          /* ignore */
+          /* ignore malformed */
         }
       };
       ws.onclose = () => {
@@ -81,86 +83,39 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={s}>{children}</Ctx.Provider>;
 }
 
-/** GET that refetches whenever the server pushes an event (no manual refresh needed). */
-export function useGet<T>(
-  path: string,
-  live = true,
-): { data: T | null; error: string; reload: () => void } {
+/** GET that refetches whenever the server pushes an event. Keeps the old data while reloading (no flicker). */
+export function useGet<T>(path: string | null, live = true) {
   const { tick } = useLive();
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [n, setN] = useState(0);
   useEffect(() => {
+    if (path === null) return;
     let alive = true;
     api<T>(path)
-      .then((d) => alive && (setData(d), setError('')))
-      .catch((e: unknown) => alive && setError(e instanceof Error ? e.message : String(e)));
+      .then((d) => {
+        if (!alive) return;
+        setData(d);
+        setError('');
+        setLoading(false);
+      })
+      .catch((e: unknown) => {
+        if (!alive) return;
+        setError(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+      });
     return () => {
       alive = false;
     };
   }, [path, live ? tick : 0, n]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { data, error, reload: () => setN((x) => x + 1) };
+  return { data, error, loading, reload: () => setN((x) => x + 1) };
 }
 
-export const SEV_COLOR = [
-  '',
-  'bg-slate-500',
-  'bg-sky-600',
-  'bg-amber-500',
-  'bg-orange-600',
-  'bg-red-600',
-];
-export const STATUS_LABEL: Record<string, string> = {
-  reported: 'Reported',
-  analysed: 'Analysed',
-  alerted: 'Alerted',
-  acknowledged: 'Acknowledged',
-  assigned: 'Assigned',
-  in_progress: 'In progress',
-  resolved: 'Resolved',
-  closed: 'Closed',
-  rejected: 'Rejected',
-  false_positive: 'False positive',
-  duplicate: 'Duplicate',
-  escalated: 'Escalated',
-};
-export const SOURCE_LABEL: Record<string, string> = {
-  qr: 'QR sticker',
-  portal: 'Worker portal',
-  cctv: 'CCTV AI',
-  audio: 'Audio AI',
-  admin: 'Admin',
-};
-
-export function Sev({ n }: { n: number }) {
-  return (
-    <span
-      className={`inline-block rounded px-2 py-0.5 text-sm font-black text-white ${SEV_COLOR[n]}`}
-    >
-      S{n}
-    </span>
-  );
-}
-export function SimTag({ on }: { on: number | boolean }) {
-  return on ? (
-    <span className="ml-1 rounded border border-dashed border-purple-500 px-1.5 text-xs font-bold text-purple-700">
-      SIMULATED / SAMPLE
-    </span>
-  ) : null;
-}
-export function Card({
-  title,
-  children,
-  className = '',
-}: {
-  title?: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={`rounded-2xl bg-white p-4 shadow ${className}`}>
-      {title && <h2 className="mb-2 text-lg font-extrabold">{title}</h2>}
-      {children}
-    </section>
-  );
+export function qs(params: Record<string, string | number | boolean | undefined | null>): string {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(params))
+    if (v !== undefined && v !== null && v !== '' && v !== false) p.set(k, String(v));
+  const s = p.toString();
+  return s ? `?${s}` : '';
 }

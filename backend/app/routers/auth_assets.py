@@ -11,8 +11,9 @@ from pydantic import BaseModel, Field
 
 from .. import db
 from ..config import settings
-from ..domain import DEPARTMENTS, now_iso
+from ..domain import now_iso
 from ..security import check_pw, hash_pw, make_token, rate_limit, rate_limit_read, require
+from ..services.departments import names as department_names
 from ..services.incidents import audit
 
 router = APIRouter()
@@ -93,12 +94,14 @@ def public_assets() -> list[dict]:
 
 
 @router.get("/public/qr/{token}")
-def resolve_qr(token: str, _=Depends(rate_limit_read)) -> dict:
+def resolve_qr(token: str, response: Response, _=Depends(rate_limit_read)) -> dict:
+    response.headers["Cache-Control"] = "no-store"  # a disabled sticker must not stay "disabled" in a phone cache after it is re-enabled
     a = db.one("SELECT id,name,name_hi,kind,site,building,floor,zone,department,qr_active FROM assets WHERE qr_token=?", (token,))
     if not a:
-        raise HTTPException(404, "Unknown QR code")
+        raise HTTPException(404, "Unknown QR code", headers={"Cache-Control": "no-store"})
+    db.run("INSERT INTO qr_scans(asset_id,ts,outcome) VALUES(?,?,?)", (a["id"], now_iso(), "ok" if a["qr_active"] else "disabled"))
     if not a["qr_active"]:
-        raise HTTPException(410, "This QR code has been disabled. Ask your supervisor for a new sticker.")
+        raise HTTPException(410, "This QR code has been disabled. Ask your supervisor for a new sticker.", headers={"Cache-Control": "no-store"})
     return a
 
 
@@ -106,15 +109,18 @@ def resolve_qr(token: str, _=Depends(rate_limit_read)) -> dict:
 def list_assets(_: dict = Depends(require("responder"))) -> list[dict]:
     return db.rows(
         """SELECT a.*, (SELECT COUNT(*) FROM incidents i WHERE i.asset_id=a.id) AS incident_count,
-        (SELECT COUNT(*) FROM incidents i WHERE i.asset_id=a.id AND i.status NOT IN ('resolved','closed','rejected','false_positive','duplicate')) AS open_count
+        (SELECT COUNT(*) FROM incidents i WHERE i.asset_id=a.id AND i.status NOT IN ('resolved','closed','rejected','false_positive','duplicate')) AS open_count,
+        (SELECT COUNT(*) FROM incidents i WHERE i.asset_id=a.id AND i.source='qr') AS qr_report_count,
+        (SELECT COUNT(*) FROM qr_scans s WHERE s.asset_id=a.id AND s.outcome='ok') AS scan_count,
+        (SELECT MAX(ts) FROM qr_scans s WHERE s.asset_id=a.id) AS last_scanned_at
         FROM assets a ORDER BY a.name"""
     )
 
 
 @router.post("/assets")
 def create_asset(body: AssetIn, user: dict = Depends(require("manager"))) -> dict:
-    if body.department not in DEPARTMENTS:
-        raise HTTPException(422, f"department must be one of {DEPARTMENTS}")
+    if body.department not in department_names():
+        raise HTTPException(422, f"department must be one of {department_names()}")
     if db.one("SELECT 1 FROM assets WHERE id=?", (body.id,)):
         raise HTTPException(409, "id exists")
     db.run(
@@ -162,6 +168,78 @@ def regenerate(aid: str, user: dict = Depends(require("manager"))) -> dict:
 
 def _qr_url(token: str, base: str | None) -> str:
     return f"{(base or settings.QR_BASE_URL).rstrip('/')}/q/{token}"
+
+
+@router.get("/assets/{aid}/scans")
+def asset_scans(aid: str, _: dict = Depends(require("responder"))) -> dict:
+    return {
+        "scans": db.rows("SELECT ts,outcome FROM qr_scans WHERE asset_id=? ORDER BY id DESC LIMIT 100", (aid,)),
+        "reports": db.rows("SELECT id,category,severity,status,created_at FROM incidents WHERE asset_id=? AND source='qr' ORDER BY created_at DESC LIMIT 50", (aid,)),
+    }
+
+
+@router.get("/assets/{aid}/sticker.png")
+def sticker_png(aid: str, template: str = "general", base: str | None = Query(None), _: dict = Depends(require("responder"))) -> Response:
+    from ..services.stickers import TEMPLATES, render_png
+
+    a = db.one("SELECT * FROM assets WHERE id=?", (aid,))
+    if not a:
+        raise HTTPException(404)
+    if template not in TEMPLATES or (base and not re.match(r"^https?://[\w.:-]+$", base)):
+        raise HTTPException(422, "bad template or base")
+    return Response(
+        render_png(a, _qr_url(a["qr_token"], base), template),
+        media_type="image/png",
+        headers={"Content-Disposition": f'attachment; filename="sticker-{aid}-{template}.png"'},
+    )
+
+
+@router.get("/assets/stickers.pdf")
+def stickers_pdf(template: str = "general", ids: str = "", base: str | None = Query(None), _: dict = Depends(require("responder"))) -> Response:
+    from ..services.stickers import TEMPLATES, render_pdf
+
+    if template not in TEMPLATES or (base and not re.match(r"^https?://[\w.:-]+$", base)):
+        raise HTTPException(422, "bad template or base")
+    want = [i for i in ids.split(",") if i]
+    rows = [a for a in db.rows("SELECT * FROM assets WHERE qr_active=1 ORDER BY name") if not want or a["id"] in want]
+    return Response(
+        render_pdf([(a, _qr_url(a["qr_token"], base)) for a in rows], template),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="stickers-{template}.pdf"'},
+    )
+
+
+@router.get("/sticker-templates")
+def sticker_templates() -> list[dict]:
+    from ..services.stickers import TEMPLATES
+
+    return [{"id": k, "label": v["label"], "tip": v["tip"], "color": "#{:02x}{:02x}{:02x}".format(*v["primary"])} for k, v in TEMPLATES.items()]
+
+
+@router.get("/departments")
+def departments(_: dict = Depends(require("responder"))) -> list[dict]:
+    return db.rows("SELECT d.name, d.description, d.active, (SELECT COUNT(*) FROM responders r WHERE r.department=d.name) AS responders FROM departments d ORDER BY d.name")
+
+
+class DeptIn(BaseModel):
+    name: str = Field(min_length=2, max_length=40)
+    description: str = Field("", max_length=200)
+
+
+@router.post("/departments")
+def add_department(body: DeptIn, user: dict = Depends(require("admin"))) -> dict:
+    if db.one("SELECT 1 FROM departments WHERE name=?", (body.name,)):
+        raise HTTPException(409, "department exists")
+    db.run("INSERT INTO departments(name,description) VALUES(?,?)", (body.name, body.description))
+    audit(user["u"], "department.create", body.name)
+    return {"ok": True}
+
+
+@router.patch("/departments/{name}")
+def toggle_department(name: str, active: bool, user: dict = Depends(require("admin"))) -> dict:
+    db.run("UPDATE departments SET active=? WHERE name=?", (int(active), name))
+    audit(user["u"], "department.active", name, str(active))
+    return {"ok": True}
 
 
 @router.get("/assets/{aid}/qr.png")

@@ -23,7 +23,9 @@
     "cv:webcam:review": "cd 3-auto-cv && python -m vision_service --source 0 --zones webcam_zones.yaml --sink firestore",
     "seed": "python -m backend.app.seed",
     "e2e": "python scripts/e2e/ui_flow.py",
-    "api": "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload"
+    "api": "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "demo:cameras": "cd 3-auto-cv && python -m vision_service.worker --source cam-store=../demo-assets/fire.mp4 --source cam-yard=../demo-assets/office_fight.mp4 --source cam-aisle=../demo-assets/samples/fp_frame_0000.jpg --detectors fire,violence,forklift_person --loop --realtime --cooldown 60",
+    "shots": "python scripts/e2e/shots.py demo-assets/shots"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
