@@ -17,3 +17,6 @@ demo-assets/*.mp4
 *.pt
 out-events/
 .pytest_cache/
+
+backend/data/
+legacy-firebase/**/lib/
