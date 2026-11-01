@@ -137,7 +137,7 @@ export default function Admin() {
           <Route path="actions" element={<ActionsTab />} />
           <Route path="events" element={<EventsTab role={role} />} />
           <Route path="stickers" element={<Stickers />} />
-          <Route path="dispatch" element={<DispatchTab />} />
+          <Route path="dispatch" element={<DispatchTab role={role} />} />
         </Routes>
       </div>
     </div>

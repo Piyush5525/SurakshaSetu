@@ -4,7 +4,15 @@ import pytest
 from vision_service.geometry import box_gap, inside_fraction, point_in_polygon
 from vision_service.machine import MachineState
 from vision_service.privacy import pixelated_jpeg
-from vision_service.rules import Detection, EpisodeDebouncer, ForkliftGapRule, HandInZoneRule, Zone
+from vision_service.rules import (
+    Detection,
+    EpisodeDebouncer,
+    ForkliftGapRule,
+    HandInZoneRule,
+    IdleMachineRule,
+    PersonInForkliftLaneRule,
+    Zone,
+)
 from vision_service.zones import load_zones
 
 
@@ -184,3 +192,31 @@ def test_snapshot_pixelates_people_and_downsizes():
     raw = cv2.cvtColor(cv2.resize(frame, (640, 360))[60:190, 110:190], cv2.COLOR_BGR2GRAY)
     # Pixelation leaves flat blocks, so fine detail (Laplacian variance) collapses.
     assert cv2.Laplacian(region, cv2.CV_64F).var() < 0.25 * cv2.Laplacian(raw, cv2.CV_64F).var()
+
+
+# ---- Phase 2 rules --------------------------------------------------------------------------
+LANE = Zone(
+    "lane-1", "forklift_lane", [(0, 0), (500, 0), (500, 500), (0, 500)], "forklift-lane", forklift_only=True
+)
+
+
+def test_person_in_forklift_only_lane_fires_after_sustain():
+    rule = PersonInForkliftLaneRule([LANE], sustain_s=1.0)
+    inside = [person((100, 100, 150, 300))]  # feet at (125, 300)
+    ev = [e for i in range(30) for e in rule.update(inside, i / 10)]
+    assert len(ev) == 1 and ev[0].rule == "person_in_forklift_lane"
+    rule2 = PersonInForkliftLaneRule([LANE], sustain_s=1.0)
+    assert [e for i in range(30) for e in rule2.update([person((700, 100, 750, 300))], i / 10)] == []
+    plain = Zone("lane-2", "forklift_lane", LANE.polygon)  # not forklift_only: pedestrians allowed
+    assert PersonInForkliftLaneRule([plain]).zones == []
+
+
+def test_idle_machine_needs_running_and_nobody_present_for_minutes():
+    rule = IdleMachineRule([DANGER], idle_minutes=0.5)  # 30 s
+    fired = [e for i in range(0, 400) for e in rule.update([], True, i / 10)]  # 40 s empty and running
+    assert len(fired) == 1 and fired[0].rule == "idle_machine" and fired[0].measure == 0.5
+    assert [
+        e for i in range(400) for e in IdleMachineRule([DANGER], 0.5).update([], False, i / 10)
+    ] == []  # not running
+    worker = [person((20, 20, 60, 90))]  # standing in the zone
+    assert [e for i in range(400) for e in IdleMachineRule([DANGER], 0.5).update(worker, True, i / 10)] == []

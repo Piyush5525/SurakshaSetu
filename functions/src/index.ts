@@ -10,6 +10,15 @@ import {
 import { projectBoardItem, shouldPublish } from './board';
 import { reportFromEvent } from './camera';
 import { DEFAULTS, type ReportStatus } from './domain';
+import {
+  SimulatedNotifier,
+  buildChain,
+  dueSteps,
+  kindForRoute,
+  type EscalationStatus,
+  type EscalationStep,
+  type Notifier,
+} from './escalation';
 import { receiptCode } from './receipt';
 import { DISMISSED_SCRUB, expiredSnapshots } from './retention';
 import { triageReport } from './triage/triage';
@@ -84,6 +93,8 @@ export const onReportCreated = onDocumentCreated('reports/{id}', async (event) =
     triagedBy: 'rules',
     updatedAt: now,
   });
+  const kind = kindForRoute(t.route);
+  if (kind) await startEscalation(id, kind, r, location.name, t.severity, now.toDate());
 });
 
 /** Create/update/delete the public boardItem for a report, through the whitelisted projection. */
@@ -216,4 +227,103 @@ export const purgeExpiredSnapshots = onCall(async (req) => {
       .update({ snapshotPath: null, snapshotPurgedAt: FieldValue.serverTimestamp() });
   }
   return { purged: expired.length };
+});
+
+// ---- Escalation router (SIMULATED dispatch) ----------------------------------------------------
+const notifier: Notifier = new SimulatedNotifier(); // swap for a real provider later (see escalation.ts)
+
+const stepToDoc = (s: EscalationStep) => ({
+  ...s,
+  dueAt: Timestamp.fromDate(s.dueAt),
+  notifiedAt: s.notifiedAt ? Timestamp.fromDate(s.notifiedAt) : null,
+});
+const docToStep = (s: Record<string, unknown>): EscalationStep => ({
+  ...(s as unknown as EscalationStep),
+  dueAt: toDate(s.dueAt),
+  notifiedAt: s.notifiedAt ? toDate(s.notifiedAt) : null,
+});
+
+async function startEscalation(
+  reportId: string,
+  kind: 'emergency' | 'fast_track',
+  report: Record<string, unknown>,
+  locationName: string,
+  severity: number,
+  startedAt: Date,
+): Promise<void> {
+  const loc = (await db.doc(`locations/${report.locationId}`).get()).data();
+  await db
+    .doc(`escalations/${reportId}`)
+    .create({
+      reportId,
+      kind,
+      status: 'active',
+      simulated: true,
+      locationId: report.locationId,
+      locationName,
+      severity,
+      assemblyPoint: String(loc?.assemblyPoint ?? ''),
+      photoPath: (report.photoPath as string | null) ?? null,
+      startedAt: Timestamp.fromDate(startedAt),
+      chain: buildChain(kind, startedAt).map(stepToDoc),
+      dispatchLog: [],
+      createdAt: Timestamp.fromDate(startedAt),
+      updatedAt: Timestamp.fromDate(startedAt),
+    })
+    .catch((e: { code?: number }) => {
+      if (e.code !== 6) throw e;
+    });
+  await runDueSteps(reportId, 1);
+}
+
+/** Notify every due step (simulated) and record it in the dispatch log. */
+async function runDueSteps(id: string, timeScale: number): Promise<number> {
+  const ref = db.doc(`escalations/${id}`);
+  const d = (await ref.get()).data();
+  if (!d) return 0;
+  const steps = (d.chain as Record<string, unknown>[]).map(docToStep);
+  const due = dueSteps(
+    d.status as EscalationStatus,
+    steps,
+    toDate(d.startedAt),
+    new Date(),
+    timeScale,
+  );
+  if (!due.length) return 0;
+  const log = [...(d.dispatchLog as unknown[])];
+  for (const s of due) {
+    const entry = await notifier.notify({
+      reportId: id,
+      kind: d.kind,
+      role: s.role,
+      label: s.label,
+      locationName: String(d.locationName),
+      severity: Number(d.severity),
+      photoPath: (d.photoPath as string | null) ?? null,
+      at: new Date(),
+      assemblyPoint: String(d.assemblyPoint ?? ''),
+    });
+    s.state = 'notified';
+    s.notifiedAt = new Date();
+    log.push({ ...entry, at: Timestamp.fromDate(entry.at) });
+  }
+  await ref.update({
+    chain: steps.map(stepToDoc),
+    dispatchLog: log,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return due.length;
+}
+
+/**
+ * Advance active escalations. The dispatcher screen calls this every few seconds while it is open;
+ * in production this would be a scheduled function. `timeScale` speeds up the simulated clock for demos.
+ */
+export const advanceEscalations = onCall(async (req) => {
+  requireStaff(req.auth?.token.role);
+  const scale = Math.min(120, Math.max(1, Number(req.data?.timeScale) || 1));
+  const active = await db.collection('escalations').where('status', '==', 'active').get();
+  let notified = 0;
+  for (const d of active.docs) notified += await runDueSteps(d.id, scale);
+  return { active: active.size, notified };
 });

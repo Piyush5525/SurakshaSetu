@@ -101,9 +101,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Escalations (SIMULATED dispatch): created/advanced by functions; staff may only acknowledge or resolve.
     match /escalations/{id} {
       allow read: if isStaff();
-      allow write: if false;
+      allow update: if isStaff()
+        && resource.data.status == 'active'
+        && changedOnly(['status', 'acknowledgedByRole', 'acknowledgedAt', 'updatedAt'])
+        && request.resource.data.status in ['acknowledged', 'resolved'];
+      allow create, delete: if false;
     }
 
     match /{document=**} {

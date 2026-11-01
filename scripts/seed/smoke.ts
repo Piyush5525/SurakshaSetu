@@ -103,6 +103,41 @@ async function main() {
     fixed,
   );
 
+  // Escalation routing: only injuryNow reaches the emergency chain; the earlier fast-track report did not.
+  const early = (await db.doc(`escalations/${id}`).get()).data();
+  check(
+    'high-potential near miss (nobody hurt) gets a supervisor-only fast-track',
+    early?.kind === 'fast_track' && early.chain.length === 1,
+    early?.kind,
+  );
+  const injId = `smokeinj${Date.now()}abcdefghij`;
+  await db.doc(`reports/${injId}`).set({
+    locationId: 'filler',
+    hazardType: 'other',
+    seriousHarmFlag: false,
+    injuryNow: true,
+    transcript: '',
+    transcriptStatus: 'no_audio',
+    lang: 'en',
+    shift: 'A',
+    status: 'received',
+    createdAt: Timestamp.now(),
+  });
+  const esc = await waitFor(async () => {
+    const d = (await db.doc(`escalations/${injId}`).get()).data();
+    return d && d.dispatchLog?.length ? d : undefined;
+  });
+  check(
+    'injuryNow starts the emergency chain (simulated), first step notified',
+    esc?.kind === 'emergency' && esc.simulated === true && esc.chain[0].state === 'notified',
+    esc,
+  );
+  check(
+    'dispatch log says SIMULATED',
+    /^SIMULATED/.test(esc?.dispatchLog?.[0]?.message ?? ''),
+    esc?.dispatchLog,
+  );
+
   // Camera event: confirm creates a camera-sourced report that is triaged.
   const evId = `smoke-e${Date.now()}`;
   await db.doc(`events/${evId}`).set({

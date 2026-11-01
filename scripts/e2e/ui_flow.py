@@ -116,6 +116,12 @@ with sync_playwright() as p:
     expect(s.get_by_text("→ report cam_").first).to_be_visible(timeout=15000)
     print("PASS confirming a camera event creates a camera report")
 
+    s.get_by_role("link", name="Dispatch (simulated)").click()
+    expect(s.get_by_text("SIMULATED DISPATCH", exact=False).first).to_be_visible()
+    expect(s.get_by_text("FAST-TRACK to supervisor").first).to_be_visible(timeout=15000)
+    s.screenshot(path=str(OUT / "7-dispatch.png"), full_page=True)
+    print("PASS dispatcher screen is labelled simulated and lists the fast-track")
+
     board = browser.new_context(viewport={"width": 1920, "height": 1080}).new_page()
     board.on("pageerror", lambda e: errors.append(str(e)))
     board.goto(f"{BASE}/board")

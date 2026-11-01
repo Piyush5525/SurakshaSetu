@@ -8,6 +8,8 @@ import { useCol, type EventDoc } from './data';
 const RULE = {
   forklift_person_gap: 'Forklift–person near miss',
   hand_in_danger_zone: 'Hand in machine danger zone while running',
+  person_in_forklift_lane: 'Person in forklift-only lane',
+  idle_machine: 'Machine running with nobody present (energy)',
 } as const;
 
 function Snapshot({ path }: { path: string }) {
@@ -64,7 +66,7 @@ export default function EventsTab({ role }: { role: Role }) {
               {e.locationId} · zone {e.zoneId} · {e.detectedAt.toLocaleString()}
               {e.confidence !== null && ` · confidence ${Math.round(e.confidence * 100)}%`}
               {e.measure !== null &&
-                ` · ${e.rule === 'forklift_person_gap' ? `gap ${e.measure}px` : `${e.measure}s in zone`}`}
+                ` · ${e.rule === 'forklift_person_gap' ? `gap ${e.measure}px` : e.rule === 'idle_machine' ? `${e.measure} min idle` : `${e.measure}s in zone`}`}
               {e.simulated && ' · machine-running signal SIMULATED'}
             </p>
             <div className="my-2">

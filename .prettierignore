@@ -4,3 +4,5 @@ lib
 package-lock.json
 *.md
 .emulator-data
+services
+demo-assets

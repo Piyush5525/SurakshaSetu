@@ -29,6 +29,7 @@ class Zone:
     type: str  # forklift_lane | machine_danger | ppe_required
     polygon: list[Point]
     location_id: str = "unknown"
+    forklift_only: bool = False  # forklift_lane zones: pedestrians must not enter (Phase 2 rule)
 
 
 @dataclass
@@ -185,6 +186,87 @@ class HandInZoneRule:
                         location_id=z.location_id,
                         confidence=round(min(hits), 3),
                         measure=round(self.sustain_s, 1),
+                    )
+                )
+        return out
+
+
+class PersonInForkliftLaneRule:
+    """Phase 2: a person's feet inside a `forklift_only` lane for `sustain_s` seconds."""
+
+    name = "person_in_forklift_lane"
+
+    def __init__(
+        self, zones: Sequence[Zone], sustain_s: float = 2.0, min_conf: float = 0.5, cooldown_s: float = 10.0
+    ):
+        self.zones = [z for z in zones if z.type == "forklift_lane" and z.forklift_only]
+        self.min_conf = min_conf
+        self._deb = {z.id: EpisodeDebouncer(sustain_s, cooldown_s) for z in self.zones}
+        self.sustain_s = sustain_s
+
+    def update(self, persons: Sequence[Detection], t: float) -> list[RuleEvent]:
+        out: list[RuleEvent] = []
+        for z in self.zones:
+            inside = [
+                p
+                for p in persons
+                if p.conf >= self.min_conf and point_in_polygon(foot_point(p.box), z.polygon)
+            ]
+            if self._deb[z.id].update(bool(inside), t):
+                out.append(
+                    RuleEvent(
+                        rule=self.name,
+                        zone_id=z.id,
+                        location_id=z.location_id,
+                        confidence=round(min(p.conf for p in inside), 3),
+                        measure=round(self.sustain_s, 1),
+                        boxes=[p.box for p in inside],
+                    )
+                )
+        return out
+
+
+class IdleMachineRule:
+    """Phase 2 (energy): machine flagged running with nobody in its zone for `idle_minutes`.
+
+    The running signal is SIMULATED. Triage tags the resulting report `idle_machine` (an eco-tag), and any
+    kWh figure shown for it is an ESTIMATE from the `assumptions` collection, never a measurement.
+    """
+
+    name = "idle_machine"
+
+    def __init__(
+        self,
+        zones: Sequence[Zone],
+        idle_minutes: float = 5.0,
+        min_conf: float = 0.4,
+        cooldown_s: float = 60.0,
+    ):
+        self.zones = [z for z in zones if z.type == "machine_danger"]
+        self.min_conf = min_conf
+        self.idle_minutes = idle_minutes
+        # grace_s = 3 s: ignore brief detection dropouts, but a person standing there resets the clock.
+        self._deb = {z.id: EpisodeDebouncer(idle_minutes * 60, cooldown_s, grace_s=3.0) for z in self.zones}
+
+    def update(self, persons: Sequence[Detection], running: bool, t: float) -> list[RuleEvent]:
+        out: list[RuleEvent] = []
+        for z in self.zones:
+            present = any(
+                p.conf >= self.min_conf
+                and (
+                    point_in_polygon(foot_point(p.box), z.polygon)
+                    or point_in_polygon(((p.box[0] + p.box[2]) / 2, (p.box[1] + p.box[3]) / 2), z.polygon)
+                )
+                for p in persons
+            )
+            if self._deb[z.id].update(running and not present, t):
+                out.append(
+                    RuleEvent(
+                        rule=self.name,
+                        zone_id=z.id,
+                        location_id=z.location_id,
+                        confidence=1.0,
+                        measure=self.idle_minutes,
                     )
                 )
         return out

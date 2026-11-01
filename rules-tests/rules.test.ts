@@ -82,6 +82,7 @@ beforeEach(async () => {
     });
     await db.doc('actions/r1').set({ status: 'open', internalNotes: 'staff only' });
     await db.doc('locations/filler').set({ name: 'Filler' });
+    await db.doc('escalations/r1').set({ status: 'active', kind: 'emergency', simulated: true });
     await db.doc('assumptions/x').set({ value: 1 });
   });
 });
@@ -264,6 +265,23 @@ describe('staff', () => {
     await assertSucceeds(admin().firestore().doc('assumptions/x').update({ value: 2 }));
     await assertSucceeds(admin().firestore().doc('locations/filler').update({ riskWeight: 1.6 }));
     await assertFails(supervisor().firestore().doc('locations/filler').update({ riskWeight: 9 }));
+  });
+
+  it('staff can acknowledge an active escalation but not edit the chain or create one', async () => {
+    const db = supervisor().firestore();
+    await assertSucceeds(db.doc('escalations/r1').get());
+    await assertFails(db.doc('escalations/r1').update({ status: 'active', kind: 'fast_track' }));
+    await assertFails(db.doc('escalations/r1').update({ chain: [] }));
+    await assertSucceeds(
+      db.doc('escalations/r1').update({ status: 'acknowledged', acknowledgedByRole: 'supervisor' }),
+    );
+    await assertFails(db.doc('escalations/r1').update({ status: 'resolved' })); // no longer active
+    await assertFails(db.doc('escalations/new').set({ status: 'active' }));
+  });
+
+  it('workers and unauthenticated clients cannot read escalations', async () => {
+    await assertFails(worker().firestore().doc('escalations/r1').get());
+    await assertFails(anon().firestore().doc('escalations/r1').get());
   });
 
   it('kpiSnapshots and escalations are read-only for staff', async () => {

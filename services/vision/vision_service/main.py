@@ -24,14 +24,20 @@ import numpy as np
 import supervision as sv
 from dotenv import load_dotenv
 
-logging.getLogger("dotenv.main").setLevel(logging.ERROR)  # unparsable lines in .env are not ours
-
 from .machine import MachineState
 from .privacy import PRIVACY_CONF, pixelated_jpeg
-from .rules import Detection, ForkliftGapRule, HandInZoneRule, RuleEvent
+from .rules import (
+    Detection,
+    ForkliftGapRule,
+    HandInZoneRule,
+    IdleMachineRule,
+    PersonInForkliftLaneRule,
+    RuleEvent,
+)
 from .sink import FirestoreSink, LocalSink, Sink
 from .zones import load_zones
 
+logging.getLogger("dotenv.main").setLevel(logging.ERROR)  # unparsable lines in .env are not ours
 LEFT_WRIST, RIGHT_WRIST = 9, 10
 ROOT = Path(__file__).resolve().parents[3]
 PROJECT_ID = "demo-plant-line3"  # must match firebase.json / npm scripts / the web app
@@ -70,6 +76,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--stride", type=int, default=1, help="process every Nth frame (CPU saver)")
     p.add_argument(
         "--max-seconds", type=float, default=0.0, help="stop after this many video seconds (0 = all)"
+    )
+    p.add_argument(
+        "--p2-rules",
+        action="store_true",
+        help="also run Phase 2 rules: person in forklift-only lane, idle machine (energy)",
+    )
+    p.add_argument("--lane-sustain", type=float, default=2.0)
+    p.add_argument(
+        "--idle-minutes", type=float, default=5.0, help="idle machine rule: minutes with nobody present"
     )
     p.add_argument("--print-model-names", action="store_true", help="load models, print model.names, exit")
     args = p.parse_args(argv)
@@ -123,6 +138,8 @@ def run(args: argparse.Namespace) -> Counter:
         args.gap_px, args.gap_sustain, args.min_conf, lanes=[z for z in zones if z.type == "forklift_lane"]
     )
     hand_rule = HandInZoneRule(zones, args.hand_sustain, args.min_conf)
+    lane_rule = PersonInForkliftLaneRule(zones, args.lane_sustain, args.min_conf) if args.p2_rules else None
+    idle_rule = IdleMachineRule(zones, args.idle_minutes) if args.p2_rules else None
     vehicle_names = {s.strip() for s in args.vehicle_classes.split(",")}
 
     src: int | str = int(args.source) if args.source.isdigit() else args.source
@@ -195,6 +212,12 @@ def run(args: argparse.Namespace) -> Counter:
             emit(ev, frame, people_all)
 
         running = machine.running(t)
+        if lane_rule:
+            for lev in lane_rule.update(tracked, t):
+                emit(lev, frame, people_all)
+        if idle_rule:
+            for iev in idle_rule.update(tracked, running, t):
+                emit(iev, frame, people_all)
         if hand_rule.zones and running:
             pr = pose_model.predict(frame, conf=0.25, verbose=False)[0]
             wrists: list[tuple[tuple[float, float], float]] = []

@@ -22,6 +22,12 @@ def load_zones(path: str | Path) -> list[Zone]:
         if len(poly) < 3:
             raise ValueError(f"zone {z['id']}: polygon needs 3+ points")
         zones.append(
-            Zone(id=z["id"], type=z["type"], polygon=poly, location_id=z.get("location_id", "unknown"))
+            Zone(
+                id=z["id"],
+                type=z["type"],
+                polygon=poly,
+                location_id=z.get("location_id", "unknown"),
+                forklift_only=bool(z.get("forklift_only", False)),
+            )
         )
     return zones

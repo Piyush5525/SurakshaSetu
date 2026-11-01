@@ -89,7 +89,7 @@ export interface ActionDoc {
   createdAt: Date;
 }
 export interface EventDoc {
-  rule: 'forklift_person_gap' | 'hand_in_danger_zone';
+  rule: 'forklift_person_gap' | 'hand_in_danger_zone' | 'person_in_forklift_lane' | 'idle_machine';
   zoneId: string;
   locationId: string;
   shift: string;

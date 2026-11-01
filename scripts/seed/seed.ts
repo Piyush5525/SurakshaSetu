@@ -15,6 +15,7 @@ import {
   type ReportStatus,
   type Shift,
 } from '../../functions/src/domain';
+import { buildChain } from '../../functions/src/escalation';
 import { receiptCode } from '../../functions/src/receipt';
 import { triageReport } from '../../functions/src/triage/triage';
 
@@ -147,6 +148,7 @@ async function main() {
     'assumptions',
     'feedback',
     'kpiSnapshots',
+    'escalations',
   ]) {
     await clear(c);
   }
@@ -249,6 +251,33 @@ async function main() {
           updatedAt: createdTs,
         });
         actionForBoard = { publicFixText, featured, closedAt };
+      }
+
+      if (t.route === 'emergency' || t.route === 'supervisor_fast_track') {
+        // Past escalations, already acknowledged (history for the dispatcher screen). All SIMULATED.
+        const kind = t.route === 'emergency' ? 'emergency' : 'fast_track';
+        batch.set(db.collection('escalations').doc(id), {
+          reportId: id,
+          kind,
+          status: 'resolved',
+          simulated: true,
+          locationId,
+          locationName: loc.name,
+          severity: t.severity,
+          assemblyPoint: loc.assemblyPoint,
+          photoPath: null,
+          startedAt: createdTs,
+          chain: buildChain(kind, createdAt).map((st) => ({
+            ...st,
+            dueAt: Timestamp.fromDate(st.dueAt),
+            state: st.afterMinutes <= 2 ? 'notified' : 'pending',
+            notifiedAt: st.afterMinutes <= 2 ? Timestamp.fromDate(st.dueAt) : null,
+          })),
+          dispatchLog: [],
+          acknowledgedByRole: 'supervisor',
+          createdAt: createdTs,
+          updatedAt: createdTs,
+        });
       }
 
       if (shouldPublish(status, createdAt, nowDate)) {
