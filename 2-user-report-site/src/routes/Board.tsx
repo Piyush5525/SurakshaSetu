@@ -33,7 +33,7 @@ export default function Board() {
     <div className="min-h-screen bg-canvas p-8 text-ink">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
         <div>
-          <p className="text-sm font-bold uppercase tracking-[0.22em] text-brand">Safer Work</p>
+          <p className="text-sm font-bold uppercase tracking-[0.22em] text-brand">SurakshaSetu</p>
           <h1 className="text-5xl font-bold">{t('board.title')}</h1>
           <p className="mt-1 text-xl text-ink-2">{t('board.sub')}</p>
         </div>

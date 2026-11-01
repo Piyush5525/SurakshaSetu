@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 120" role="img" aria-labelledby="t d">
+  <title id="t">SurakshaSetu</title>
+  <desc id="d">A shield containing a suspension bridge with a red beacon, next to the word SurakshaSetu.</desc>
+  <g transform="translate(8 8) scale(1.6)">
+    <path d="M32 3 L57 12.5 V32 C57 47 46.5 57.5 32 61.5 C17.5 57.5 7 47 7 32 V12.5 Z" fill="#1c1917"/>
+    <path d="M13 40 Q32 12 51 40" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M11 40 H53" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M21.5 40 V31 M32 40 V26.5 M42.5 40 V31" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+    <path d="M17 46 H47" stroke="#c8102e" stroke-width="3.2" stroke-linecap="round"/>
+    <circle cx="32" cy="19" r="3.6" fill="#c8102e"/>
+  </g>
+  <text x="124" y="66" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Arial, sans-serif" font-size="46" font-weight="700" fill="#1c1917" letter-spacing="-0.5">Suraksha<tspan fill="#c8102e">Setu</tspan></text>
+  <text x="126" y="92" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Arial, sans-serif" font-size="14" font-weight="600" fill="#78716c" letter-spacing="3">INDUSTRIAL SAFETY BRIDGE</text>
+</svg>

@@ -23,7 +23,7 @@ export function Shell({
         >
           <Link to={back ?? '/'} className="min-w-0">
             <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-brand">
-              Safer Work
+              SurakshaSetu
             </span>
             <span className="block truncate text-base font-semibold">{t('app.plant')}</span>
           </Link>

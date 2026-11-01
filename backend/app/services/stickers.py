@@ -78,7 +78,7 @@ def render_png(asset: dict, qr_url: str, template: str = "general") -> bytes:
         d.text((x - 11, 1424), n, font=_font(46), fill="white")
         box = d.textbbox((0, 0), label, font=_font(40))
         d.text((x - (box[2] - box[0]) / 2 - box[0], 1486), label, font=_font(40), fill=dark)
-    _center(d, 1548, "Anonymous · under 30 seconds · no login · Safer Work", _font(34), (90, 98, 110))
+    _center(d, 1548, "Anonymous · under 30 seconds · no login · SurakshaSetu", _font(34), (90, 98, 110))
     _center(d, 1590, "Hackathon prototype · not an official L'Oreal product", _font(30), (130, 138, 150))
     out = io.BytesIO()
     img.save(out, format="PNG", dpi=(300, 300))

@@ -200,7 +200,7 @@ function Shell({ user, onOut }: { user: User; onOut: () => void }) {
   const sidebar = (
     <nav aria-label="Main" className="flex h-full flex-col bg-surface">
       <div className="border-b border-line px-5 py-4">
-        <p className="text-[10px] font-bold tracking-[0.22em] text-brand">L'ORÉAL</p>
+        <p className="text-[10px] font-bold tracking-[0.22em] text-brand">SURAKSHASETU</p>
         <p className="text-sm font-semibold leading-tight">Industrial Safety Operations Centre</p>
       </div>
       <ul className="flex-1 overflow-auto p-3">

@@ -2,7 +2,7 @@ import type { Dict } from './en';
 
 export const hi: Dict = {
   app: {
-    name: 'सुरक्षित काम',
+    name: 'सुरक्षासेतु',
     tagline: 'देखें। स्कैन करें। बताएं।',
     plant: 'डेमो प्लांट — लाइन 3 (काल्पनिक डेमो)',
   },

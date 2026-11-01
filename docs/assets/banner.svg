@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" role="img" aria-labelledby="t d">
+  <title id="t">SurakshaSetu: Scan, Speak, See</title>
+  <desc id="d">Banner with the SurakshaSetu logo and the line: from a worker's first report to a resolved incident.</desc>
+  <rect width="1200" height="320" fill="#faf9f7"/>
+  <rect x="0" y="0" width="1200" height="8" fill="#c8102e"/>
+  <g opacity="0.9" stroke="#e7e3df" stroke-width="2" fill="none">
+    <path d="M700 250 Q900 70 1100 250"/>
+    <path d="M680 250 H1120"/>
+    <path d="M760 250 V176 M800 250 V152 M840 250 V135 M880 250 V124 M920 250 V124 M960 250 V135 M1000 250 V152 M1040 250 V176" />
+  </g>
+  <g transform="translate(64 62) scale(2.6)">
+    <path d="M32 3 L57 12.5 V32 C57 47 46.5 57.5 32 61.5 C17.5 57.5 7 47 7 32 V12.5 Z" fill="#1c1917"/>
+    <path d="M13 40 Q32 12 51 40" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M11 40 H53" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M21.5 40 V31 M32 40 V26.5 M42.5 40 V31" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+    <path d="M17 46 H47" stroke="#c8102e" stroke-width="3.2" stroke-linecap="round"/>
+    <circle cx="32" cy="19" r="3.6" fill="#c8102e"/>
+  </g>
+  <text x="260" y="140" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Arial, sans-serif" font-size="78" font-weight="700" fill="#1c1917" letter-spacing="-1.5">Suraksha<tspan fill="#c8102e">Setu</tspan></text>
+  <text x="264" y="186" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Arial, sans-serif" font-size="26" font-weight="600" fill="#44403c">Scan · Speak · See</text>
+  <text x="264" y="226" font-family="Inter, 'Segoe UI', system-ui, -apple-system, Arial, sans-serif" font-size="20" fill="#78716c">A bridge from a worker's first report to a resolved incident.</text>
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, Arial, sans-serif" font-size="15" font-weight="600" fill="#1c1917">
+    <rect x="264" y="256" width="132" height="32" rx="16" fill="#fff" stroke="#d3cdc7"/><text x="330" y="277" text-anchor="middle">QR reporting</text>
+    <rect x="408" y="256" width="150" height="32" rx="16" fill="#fff" stroke="#d3cdc7"/><text x="483" y="277" text-anchor="middle">Worker portal</text>
+    <rect x="570" y="256" width="132" height="32" rx="16" fill="#fff" stroke="#d3cdc7"/><text x="636" y="277" text-anchor="middle">AI cameras</text>
+    <rect x="714" y="256" width="166" height="32" rx="16" fill="#1c1917"/><text x="797" y="277" text-anchor="middle" fill="#fff">Control Centre</text>
+  </g>
+</svg>

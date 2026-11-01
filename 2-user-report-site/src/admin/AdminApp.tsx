@@ -29,7 +29,7 @@ function SignIn({ onDone }: { onDone: (u: User) => void }) {
     <div className="grid min-h-screen bg-canvas lg:grid-cols-[1.1fr_1fr]">
       <div className="hidden flex-col justify-between bg-night p-12 text-night-text lg:flex">
         <div>
-          <p className="text-xs font-bold tracking-[0.25em] text-brand">L'ORÉAL</p>
+          <p className="text-xs font-bold tracking-[0.25em] text-brand">SURAKSHASETU</p>
           <h1 className="mt-2 text-3xl font-semibold leading-tight">
             Industrial Safety Operations Centre
           </h1>

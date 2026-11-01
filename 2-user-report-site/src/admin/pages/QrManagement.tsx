@@ -85,11 +85,18 @@ function Preview({
   const [err, setErr] = useState('');
   useEffect(() => {
     let url = '';
+    let alive = true; // an older, slower response must never replace a newer one
     setErr('');
+    setSrc(''); // show the spinner while the new sticker renders
     blobOf(`/assets/${asset.id}/sticker.png?template=${template}&base=${encodeURIComponent(base)}`)
-      .then((b) => setSrc((url = URL.createObjectURL(b))))
-      .catch((e: unknown) => setErr(e instanceof Error ? e.message : 'Preview failed'));
+      .then((b) => {
+        if (!alive) return;
+        url = URL.createObjectURL(b);
+        setSrc(url);
+      })
+      .catch((e: unknown) => alive && setErr(e instanceof Error ? e.message : 'Preview failed'));
     return () => {
+      alive = false;
       if (url) URL.revokeObjectURL(url);
     };
   }, [asset.id, template, base, nonce]);

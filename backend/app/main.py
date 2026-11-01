@@ -25,7 +25,7 @@ async def lifespan(_: FastAPI):
     workers.stop()
 
 
-app = FastAPI(title="Safer Work incident backend", version="1.0", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json")
+app = FastAPI(title="SurakshaSetu incident backend", version="1.0", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json")
 app.add_middleware(
     CORSMiddleware, allow_origin_regex=settings.CORS_REGEX, allow_credentials=False, allow_methods=["*"], allow_headers=["*"]
 )

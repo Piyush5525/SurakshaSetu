@@ -207,7 +207,6 @@ export default function Overview() {
               key: String(s),
               label: `Severity ${s}`,
               value: d.data?.by_severity.find((x) => String(x.key) === String(s))?.n ?? 0,
-              color: '',
             }))}
             onPick={(x) => go({ severity_min: Number(x.key) })}
             color="bg-ink-2"

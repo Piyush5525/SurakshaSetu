@@ -1,6 +1,6 @@
 export const en = {
   app: {
-    name: 'Safer Work',
+    name: 'SurakshaSetu',
     tagline: 'Spot it. Scan it. Say it.',
     plant: 'Demo Plant — Line 3 (fictional)',
   },
