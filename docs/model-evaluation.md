@@ -1,6 +1,6 @@
 # Computer-vision model evaluation (Phases 1 and 2)
 
-Date: 2026-11-01. **Read-only so far:** metadata, file lists and documented classes were read through the GitHub API. **No third-party weights have been downloaded, loaded or run**, so every "integration status" below is _pending_. Nothing is marked "integrated" until it loads, prints its class names and passes an inference test (project rule).
+Date: 2026-11-01. Phase 2 was read-only; after the owner approved using all repositories (including those without a licence file, for local use with credit and no redistribution), the weights were downloaded and tested. Results are in the last section. A model is marked _integrated_ only if it loaded, printed its class names and produced valid output on a sample.
 
 ## Phase 1: existing system (what the new models plug into)
 
@@ -46,3 +46,38 @@ New detectors are added as plugins in `3-auto-cv/vision_service/plugins.py` with
 1. **Licences / permission** for the four repositories with no licence (7, 5, 8-primary, and the code of 4): download weights for local, non-redistributed evaluation only (kept out of git, credited), or ask the authors first, or skip them?
 2. **Model 6** has no weights: accept the zero-shot + motion stop-gap, or point me to another box/pallet weight source?
 3. **Forklift distances:** the forklift model's thresholds are in metres; we need a camera calibration (two points a known distance apart) per camera, or we report pixel-based CAUTION/CRITICAL, clearly labelled.
+
+## Results: weights loaded and run (2026-11-01, CPU, `python tools/evaluate_models.py`)
+
+| Model | Task | Real class names (`model.names`) | Sample runs (conf floor 0.25) | Load |
+|---|---|---|---|---|
+| fire | `detect` | Fire, Smoke | constr_truck.jpg: 0 det (none), 137 ms; fp_frame_0000.jpg: 0 det (none), 37 ms; fp_frame_0030.jpg: 0 det (none), 40 ms | 0.12 s |
+| forklift | `detect` | forklift, person | fp_frame_0000.jpg: 3 det (forklift 0.92, person 0.84, person 0.76), 33 ms; fp_frame_0030.jpg: 2 det (forklift 0.97, person 0.61), 36 ms | 0.06 s |
+| leak | `detect` | crack, gas, leak, no leak, water | constr_truck.jpg: 0 det (none), 37 ms; fp_frame_0000.jpg: 1 det (no leak 0.25), 38 ms; fp_frame_0030.jpg: 1 det (no leak 0.42), 36 ms | 0.06 s |
+| liquid-seg | `segment` | bottle, glass, liquid, wine-glass | constr_truck.jpg: 0 det (none), 48 ms; fp_frame_0000.jpg: 2 det (liquid 0.28, liquid 0.28), 48 ms; fp_frame_0030.jpg: 4 det (liquid 0.78, liquid 0.55, liquid 0.45), 45 ms | 0.06 s |
+| package | `detect` | dent, dirt, hole | pkg_01.png: 2 det (hole 0.44, dent 0.3), 34 ms; pkg_02.png: 3 det (hole 0.62, dent 0.33, dent 0.27), 34 ms; pkg_03.png: 2 det (dent 0.49, dent 0.37), 28 ms | 0.04 s |
+| sdg-box (stage 1) | `detect` | The_Box | fp_frame_0000.jpg: 1 det (The_Box 0.45), 32 ms; fp_frame_0030.jpg: 1 det (The_Box 0.32), 32 ms; pkg_01.png: 1 det (The_Box 0.38), 44 ms | 0.04 s |
+| sdg-defect (stage 2) | `detect` | Stain, Puncture | pkg_01.png: 2 det (Stain 0.68, Puncture 0.52), 45 ms; pkg_02.png: 2 det (Stain 0.63, Puncture 0.51), 43 ms; pkg_03.png: 0 det (none), 35 ms | 0.04 s |
+| waste | `detect` | aluminumCan_awss, aluminumFoil_awss, apple_awss, banana_awss, battery_awss, bolt_awss, bottle_awss, cigarette_awss, egg_awss, foodContainer_awss, juiceBox_awss, leaf_awss, nut_awss, orange_awss, paperBag_awss, paperCup_awss, paper_awss, plasticFoodPacket_awss, plasticPacket_awss | constr_truck.jpg: 0 det (none), 37 ms; fp_frame_0000.jpg: 0 det (none), 38 ms; fp_frame_0030.jpg: 0 det (none), 36 ms | 0.05 s |
+
+Samples: two eye-level warehouse frames from the forklift repo (people + forklift), three packaging photos from the package repo, and the same frames as negatives for the other models. **No positive sample exists for the leak, waste or liquid models**, so for them only loading, correct classes and "no false alarm on unrelated frames" were verified, not detection of a real leak or waste item.
+
+## Integration status (all through the same worker, confirmation, evidence and central incident path)
+
+| # | Capability | Plugin | Status | Evidence | Limits found |
+|---|---|---|---|---|---|
+| 1 | Fire / smoke | `fire` | **integrated, verified on footage** | `fire.mp4` -> 1 confirmed incident, evidence frame + clip | confidence 0.4-0.7 on that clip; small fires may be missed |
+| 2 | Fall | `fall` | integrated, **unverified** (heuristic) | loads, runs, no false alarm on a fight clip | no fall footage exists to test it |
+| 3 | Violence | `violence` | integrated, **weak** (heuristic) | loads, runs | missed the only fight clip; human verification required |
+| 4 | Machinery proximity | `machinery_proximity` | **integrated** (rule) | people video + dashboard-configured danger zone -> 1 incident; stopped machine never alerts (unit test) | no machinery detector: the zone is the machine; running signal simulated |
+| 5 | Chemical leak | `spill` (leak model) | integrated, **detection unverified** | classes verified; `no leak` on warehouse frames; never alerts on `no leak`/`crack` | pipeline domain, no positive sample, cannot identify a chemical |
+| 6 | Storage instability | `storage_instability` | integrated as **stop-gap** (rules on SDG box detector) | loads; static scene raises nothing; synthetic-track unit tests for falling/displaced rules | requested repo has **no weights**; box detector is mostly synthetic-trained; no pallet class; not tested on real falling boxes |
+| 7 | Forklift-pedestrian | `forklift_person` | **integrated, verified on frames** | forklift 0.92-0.97, person 0.61-0.84; sample frame -> CAUTION incident; repeat de-duplicated; CRITICAL escalates | distances are estimates unless `calibration.px_per_m` is set; tested on still frames, not moving video |
+| 8 | Package damage | `package_damage` | **integrated, verified on samples** | pkg photos -> hole 0.44-0.62, dent 0.3-0.49; SDG two-stage -> stain 0.63-0.68 | small staged/synthetic training data; visible damage only (no quantity/content check) |
+| 9 | Waste | `waste` | integrated, **detection unverified** | 19 classes verified; zero-alert without bin zones (test) | no positive sample; rules need configured bin zones; AGPL-3.0, cite the paper |
+| - | LiquidMonitorAI segmentation | none | **evaluated, rejected** | `liquid` 0.78 on a dry warehouse floor | not usable as a spill detector |
+
+## Decisions made
+1. All listed repositories were used, weights kept out of git, credits in `3-auto-cv/models/third_party/SOURCES.md`.
+2. Storage: no box/pallet weights exist in the requested repo, so the MIT SDG box detector plus motion rules is the stop-gap, labelled third-party / unverified.
+3. Forklift distances: shown as **estimates** (assumes a ~2 m forklift) unless a camera has `calibration.px_per_m`; the basis is stored with every event.

@@ -17,6 +17,7 @@ import numpy as np
 
 from .geometry import Box, inside_fraction, point_in_polygon
 from .rules import Detection, ForkliftGapRule, HandInZoneRule, Zone
+from .zones import CameraConfig
 
 ROOT = Path(__file__).resolve().parent.parent
 LEFT_WRIST, RIGHT_WRIST = 9, 10
@@ -49,6 +50,7 @@ class FrameCtx:
     zones: list[Zone]
     machine_running: bool
     camera_id: str
+    cfg: CameraConfig | None = None
 
 
 class Plugin:
@@ -309,14 +311,36 @@ class OpenVocabPlugin(Plugin):
         ]
 
 
+def _extra(name: str, fallback):
+    """Prefer the third-party-weights plugin when its weights exist; else the earlier plugin (or None)."""
+    from . import plugins_extra as X
+
+    needs = {
+        "forklift_person": "forklift/best.pt",
+        "spill": "leak/best.pt",
+        "waste": "waste/best.pt",
+        "storage_instability": "sdg_v2_HN_yolo1/best.pt",
+        "package_damage": "package/best.pt",
+        "machinery_proximity": None,
+    }[name]
+    if needs is None or X.have(f"{X.TP}/{needs}"):
+        return X.FACTORIES.get(name, lambda: X.PackagePlugin())()
+    if fallback is None:
+        raise RuntimeError(f"weights models/third_party/{needs} not found")
+    return fallback()
+
+
 PLUGIN_FACTORIES = {
     "fire": lambda: FirePlugin(),
     "fall": lambda: ActionPlugin("fall"),
     "violence": lambda: ActionPlugin("violence"),
-    "forklift_person": lambda: ForkliftPlugin(),
+    "forklift_person": lambda: _extra("forklift_person", ForkliftPlugin),
     "hand_in_zone": lambda: HandInZonePlugin(),
+    "machinery_proximity": lambda: _extra("machinery_proximity", None),
     "ppe": lambda: OpenVocabPlugin("ppe"),
-    "spill": lambda: OpenVocabPlugin("spill"),
+    "spill": lambda: _extra("spill", lambda: OpenVocabPlugin("spill")),
+    "storage_instability": lambda: _extra("storage_instability", lambda: OpenVocabPlugin("blocked_aisle")),
     "blocked_aisle": lambda: OpenVocabPlugin("blocked_aisle"),
-    "waste": lambda: OpenVocabPlugin("waste"),
+    "package_damage": lambda: _extra("package_damage", None),
+    "waste": lambda: _extra("waste", lambda: OpenVocabPlugin("waste")),
 }

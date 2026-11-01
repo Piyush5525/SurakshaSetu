@@ -42,16 +42,23 @@ python -m vision_service.worker --source cam-line3=0                            
 python -m vision_service.worker                                                                                # every camera registered in the dashboard
 ```
 
-Detectors (see **Admin → Live monitoring**, where each can be switched off and its confidence set):
+The nine capabilities (**Admin → Computer vision**: model status, counters, enable/disable, confidence, camera assignment, zones, routing). Every one only creates a _potential_ event that goes to the central incident engine; none sends alerts itself.
 
-| Detector                                 | Method                                                          | Maturity                                                                              |
-| ---------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `fire` (fire + smoke)                    | your trained `best_nano_111.pt` (classes verified: Fire, Smoke) | **trained**; seen working on `fire.mp4`                                               |
-| `fall`                                   | pose rules (ported from your repo)                              | heuristic; no real fall clip available to test, accuracy unknown                      |
-| `violence`                               | pose gate + CLIP (ported)                                       | heuristic; **missed** the one fight clip available; always needs human verification   |
-| `forklift_person`, `hand_in_zone`        | YOLOv8 + geometry rules inside configured zones                 | rules; machine-running signal is simulated                                            |
-| `ppe`, `spill`, `blocked_aisle`, `waste` | YOLO-World zero-shot                                            | experimental, zone-gated, no measured accuracy                                       |
-| audio (alarm, scream, glass, impact)     | none connected                                                  | **simulated only**, labelled                                                          |
+| #   | Capability                    | Source / weights                                                                       | Status                                                                  |
+| --- | ----------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 1   | Fire + smoke                  | your `best_nano_111.pt` (Fire, Smoke)                                                  | **trained, verified** on `fire.mp4`                                     |
+| 2   | Fall                          | pose rules (your repo)                                                                 | heuristic; no fall clip to test                                         |
+| 3   | Violence                      | pose gate + CLIP (your repo)                                                           | heuristic; missed the one fight clip; human verification                |
+| 4   | Machinery proximity           | tracked people + configured danger zone + running state                                | rule; verified on a people video; running signal simulated              |
+| 5   | Chemical / liquid leak        | `MSunusi/pipeline-leak-detection` (gas, leak, water; `no leak` ignored)                | loads, runs; pipeline domain, no positive sample                        |
+| 6   | Falling / displaced boxes     | SDG `The_Box` detector + ByteTrack + motion rules (the requested repo has no weights)  | stop-gap; rules unit-tested, not tested on real falls                   |
+| 7   | Forklift-pedestrian proximity | `sounak-sarkar-gwc/Forklift-pedestrian-proximity` (forklift, person) + ByteTrack       | **verified on frames**; SAFE/CAUTION/CRITICAL; metres need calibration  |
+| 8   | Damaged packaging             | `package-defect-detector` (dent, dirt, hole) + SDG two-stage (Stain, Puncture)         | **verified on samples**; visible damage only                            |
+| 9   | Improper waste disposal       | `siyad23/waste-sorting-model` (19 classes, 4 groups) + bin zones                       | loads, runs; no positive sample; needs configured bins                  |
+| +   | PPE, hand-in-zone, aisle      | YOLO-World zero-shot / pose wrist rules                                                | experimental                                                            |
+| +   | Audio (alarm, scream, glass)  | none connected                                                                         | **simulated only**                                                      |
+
+Full evaluation, real class names and limits: [docs/model-evaluation.md](docs/model-evaluation.md). Weight credits and licences: `3-auto-cv/models/third_party/SOURCES.md` (weights are not in git).
 
 Categories without a reliable detector stay manual-report only (production quality, lab contamination, logistics) and are marked "AI pending". Ordinary CCTV cannot identify a spill's chemical or confirm product or lab contamination.
 
@@ -63,8 +70,8 @@ Everything is **simulated** until you set `DEMO_MODE=false` in `.env` (see `.env
 
 ```
 npm run lint && npm run typecheck          # web apps
-npm test                                   # web unit tests + 21 backend tests
-cd 3-auto-cv && python -m pytest && ruff check .     # 24 vision tests
+npm test                                   # web unit tests + 28 backend tests
+cd 3-auto-cv && python -m pytest && ruff check .     # 40 vision tests (rules + real-weight model tests)
 npm run dev  (one terminal)   then   npm run e2e     # Playwright + Chrome: QR, portal, offline, live dashboard, workflow, board, CV post
 ```
 

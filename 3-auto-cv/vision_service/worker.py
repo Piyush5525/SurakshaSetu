@@ -28,12 +28,40 @@ from . import plugins as P
 from .client import BackendClient
 from .machine import MachineState
 from .privacy import PRIVACY_CONF, pixelate, pixelated_jpeg
-from .rules import Detection, Zone
-from .zones import load_zones
+from .rules import Detection
+from .zones import CameraConfig, load_camera_config, parse_camera_config
 
 ROOT = Path(__file__).resolve().parent.parent
 CLIP_BEFORE_S, CLIP_AFTER_S = 4.0, 3.0
 PREVIEW_EVERY_S = 1.0
+
+
+class StillCap:
+    """Feeds one image as a short fixed video so image samples can run through the same pipeline."""
+
+    def __init__(self, path: str, seconds: float = 9.0, fps: float = 24.0) -> None:
+        self.img = cv2.imread(path)
+        self.n = int(seconds * fps)
+        self.fps = fps
+        self.i = 0
+
+    def isOpened(self) -> bool:  # noqa: N802 (mirrors cv2.VideoCapture)
+        return self.img is not None
+
+    def read(self) -> tuple[bool, Any]:
+        if self.i >= self.n:
+            return False, None
+        self.i += 1
+        return True, self.img.copy()
+
+    def get(self, prop: int) -> float:
+        return self.fps if prop == cv2.CAP_PROP_FPS else 0.0
+
+    def release(self) -> None:
+        pass
+
+
+IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
 
 class Confirmer:
@@ -72,19 +100,24 @@ class Shared:
 
 
 class CameraRunner(threading.Thread):
-    def __init__(self, cam: dict[str, Any], source: str, detectors: list[str], zones: list[Zone], client: BackendClient,
+    def __init__(self, cam: dict[str, Any], source: str, detectors: list[str], cfg: CameraConfig, client: BackendClient,
                  shared: Shared, args: argparse.Namespace, machine: MachineState) -> None:
         super().__init__(daemon=True, name=f"cam-{cam['id']}")
         self.cam, self.source, self.client, self.shared, self.args, self.machine = cam, source, client, shared, args, machine
-        self.zones = zones
+        self.cfg = cfg
+        self.zones = cfg.zones
         self.stop = threading.Event()
         self.plugins: list[P.Plugin] = []
+        statuses: dict[str, str] = {}
         for d in detectors:
             try:
                 self.plugins.append(P.PLUGIN_FACTORIES[d]())
+                statuses[d] = "ready"
                 print(f"[{cam['id']}] detector '{d}' ready")
             except Exception as e:  # missing weights, no CLIP, etc: say so, keep the others running
+                statuses[d] = f"unavailable: {type(e).__name__}: {e}"
                 print(f"[{cam['id']}] detector '{d}' NOT available: {type(e).__name__}: {e}")
+        client.detector_status(cam["id"], statuses)
         self.conf: dict[tuple[str, str], Confirmer] = {}
         self.cool: dict[tuple[str, str], float] = {}
         self.ring: deque[tuple[float, np.ndarray, list[tuple[float, float, float, float]]]] = deque()
@@ -92,11 +125,13 @@ class CameraRunner(threading.Thread):
         self.posted = 0
 
     # -- helpers ---------------------------------------------------------------------------------------------
-    def _open(self) -> cv2.VideoCapture:
+    def _open(self) -> cv2.VideoCapture | StillCap:
         src: int | str = int(self.source) if self.source.isdigit() else self.source
         if isinstance(src, str) and not src.startswith(("rtsp://", "http://", "https://")):
             p = Path(src)
             src = str(p if p.is_absolute() else (Path.cwd() / p if (Path.cwd() / p).exists() else ROOT / p))
+        if isinstance(src, str) and src.lower().endswith(IMAGE_EXT):
+            return StillCap(src)
         cap = cv2.VideoCapture(src)
         if isinstance(src, int):
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
@@ -183,7 +218,7 @@ class CameraRunner(threading.Thread):
             n_proc += 1
             people, vehicles = self.shared.prepass(frame)
             pboxes = [p.box for p in people]
-            ctx = P.FrameCtx(frame, t, datetime.now(), people, vehicles, self.zones, self.machine.running(t), self.cam["id"])
+            ctx = P.FrameCtx(frame, t, datetime.now(), people, vehicles, self.zones, self.machine.running(t), self.cam["id"], self.cfg)
             small = frame if frame.shape[1] <= 640 else cv2.resize(frame, (640, int(frame.shape[0] * 640 / frame.shape[1])))
             k = small.shape[1] / frame.shape[1]
             self.ring.append((t, small, [tuple(v * k for v in b) for b in pboxes]))  # type: ignore[misc]
@@ -277,8 +312,13 @@ def main(argv: list[str] | None = None) -> int:
             continue
         dets = [d for d in cam["detectors"] if d in P.PLUGIN_FACTORIES and (not only or d in only)]
         zf = zone_files.get(cam["id"]) or (ROOT / "zones" / f"{cam['id']}.yaml")
-        zones = load_zones(zf) if Path(zf).exists() else []
-        r = CameraRunner(cam, src, dets, zones, client, shared, args, machine)
+        if cam.get("config"):  # configured in the dashboard: wins over local files
+            cfg = parse_camera_config(cam["config"])
+        elif Path(zf).exists():
+            cfg = load_camera_config(zf)
+        else:
+            cfg = CameraConfig()
+        r = CameraRunner(cam, src, dets, cfg, client, shared, args, machine)
         runners.append(r)
     if not runners:
         print("No camera to run. Register a camera with a source in the dashboard or pass --source CAM=VIDEO.")

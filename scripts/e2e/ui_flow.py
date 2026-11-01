@@ -152,8 +152,8 @@ with sync_playwright() as p:
     print(f"PASS CV worker detection -> {iid} ({res['status']}) with model, confidence and evidence")
 
     # Other admin pages render
-    for path, text in [("live", "Detection models"), ("map", "Factory map"), ("assets", "QR stickers"),
-                       ("notifications", "Alert history"), ("analytics", "By category")]:
+    for path, text in [("live", "Audio monitoring and demo simulator"), ("map", "Factory map"), ("assets", "QR stickers"),
+                       ("notifications", "Alert history"), ("analytics", "By category"), ("cv", "Computer vision capabilities")]:
         adm.goto(f"{SITE}/admin/{path}")
         expect(adm.get_by_text(text).first).to_be_visible(timeout=10000)
         adm.screenshot(path=str(OUT / f"8-admin-{path}.png"))

@@ -17,10 +17,9 @@ from .services import realtime
 async def lifespan(_: FastAPI):
     db.init_db()
     realtime.bind_loop(asyncio.get_running_loop())
-    if not db.one("SELECT 1 FROM users LIMIT 1"):
-        from .seed import seed_basics
+    from .seed import seed_basics
 
-        seed_basics()
+    seed_basics()  # idempotent: adds missing machines/cameras/logins, never overwrites admin changes
     workers.start()
     yield
     workers.stop()

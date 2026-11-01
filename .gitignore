@@ -20,3 +20,6 @@ out-events/
 
 backend/data/
 legacy-firebase/**/lib/
+
+demo-assets/samples/
+3-auto-cv/models/third_party/*/*.pt

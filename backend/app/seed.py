@@ -29,10 +29,11 @@ ASSETS = [
 ]
 CAMERAS = [
     # id, name, kind, x, y, zone, detectors, asset
-    ("cam-line3", "Line 3 camera", "camera", 20, 8, "Filling", ["hand_in_zone", "fire", "fall", "ppe"], "filler"),
-    ("cam-aisle", "Forklift aisle camera", "camera", 30, 36, "Warehouse", ["forklift_person", "fall", "blocked_aisle", "fire"], "forklift_aisle"),
+    ("cam-line3", "Line 3 camera", "camera", 20, 8, "Filling", ["hand_in_zone", "machinery_proximity", "fire", "fall", "ppe"], "filler"),
+    ("cam-aisle", "Forklift aisle camera", "camera", 30, 36, "Warehouse", ["forklift_person", "storage_instability", "fall", "fire", "blocked_aisle"], "forklift_aisle"),
     ("cam-store", "Chemical store camera", "camera", 78, 36, "Storage", ["fire", "spill"], "chem_store"),
     ("cam-yard", "Waste yard camera", "camera", 72, 74, "Outdoor", ["waste", "fire", "violence"], "waste_yard"),
+    ("cam-dock", "Loading dock camera", "camera", 28, 74, "Logistics", ["package_damage", "forklift_person", "fire"], "dock"),
     ("mic-hall", "Hall microphone (simulated)", "microphone", 50, 30, "Warehouse", ["audio"], None),
 ]
 RESPONDERS = [
@@ -70,7 +71,11 @@ def seed_basics() -> None:
                 (*a, new_qr_token(), now_iso()),
             )
     for c in CAMERAS:
-        if not db.one("SELECT 1 FROM cameras WHERE id=?", (c[0],)):
+        have = db.one("SELECT detectors_json FROM cameras WHERE id=?", (c[0],))
+        if have:  # add newly supported detectors to cameras seeded earlier; never remove what an admin chose
+            merged = list(dict.fromkeys([*db.jload(have["detectors_json"], []), *c[6]]))
+            db.run("UPDATE cameras SET detectors_json=? WHERE id=?", (db.jdump(merged), c[0]))
+        if not have:
             sim = 1 if c[2] == "microphone" else 0
             db.run("INSERT INTO cameras(id,name,kind,x,y,zone,detectors_json,asset_id,simulated) VALUES(?,?,?,?,?,?,?,?,?)",
                    (c[0], c[1], c[2], c[3], c[4], c[5], db.jdump(c[6]), c[7], sim))

@@ -16,19 +16,6 @@ interface Cam {
   preview_url: string;
   last_seen: string | null;
 }
-interface Det {
-  name: string;
-  label: string;
-  category: string;
-  maturity: string;
-  model: string;
-  licence: string;
-  note: string;
-  implemented: boolean;
-  enabled: boolean;
-  min_conf: number | null;
-  requires_verification: boolean;
-}
 interface Ev {
   id: number;
   ts: string;
@@ -38,14 +25,6 @@ interface Ev {
   confidence: number;
   outcome: string;
 }
-
-const MATURITY: Record<string, string> = {
-  trained: 'bg-green-100 text-green-800',
-  rules: 'bg-sky-100 text-sky-800',
-  heuristic: 'bg-amber-100 text-amber-800',
-  open_vocab: 'bg-orange-100 text-orange-800',
-  simulated: 'bg-purple-100 text-purple-800',
-};
 
 function Preview({ cam }: { cam: Cam }) {
   const [n, setN] = useState(0);
@@ -72,17 +51,8 @@ function Preview({ cam }: { cam: Cam }) {
 
 export default function Live() {
   const cams = useGet<Cam[]>('/cameras');
-  const dets = useGet<Det[]>('/detectors', false);
   const evs = useGet<Ev[]>('/ai-events?limit=25');
   const [msg, setMsg] = useState('');
-  const patchDet = async (name: string, body: object) => {
-    try {
-      await api(`/detectors/${name}`, { method: 'PATCH', json: body });
-      dets.reload();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : 'Failed');
-    }
-  };
   const sim = async (kind: string) => {
     try {
       await api('/demo/simulate', { json: { kind } });
@@ -136,65 +106,6 @@ export default function Live() {
           </Card>
         ))}
       </div>
-
-      <Card title="Detection models (enable / disable, set confidence)">
-        <p className="mb-2 text-sm text-slate-600">
-          Maturity is shown honestly: only <b>trained</b> models were trained for their class.
-          Rules, zero-shot and heuristic detectors have no measured accuracy here and every event
-          they raise needs human verification.
-        </p>
-        <div className="grid gap-2">
-          {dets.data?.map((d) => (
-            <div
-              key={d.name}
-              className="grid items-center gap-2 rounded-xl border p-3 md:grid-cols-[1fr_auto]"
-            >
-              <div>
-                <p className="font-bold">
-                  {d.label}{' '}
-                  <span className={`ml-1 rounded px-1.5 text-xs ${MATURITY[d.maturity]}`}>
-                    {d.maturity.replace('_', '-')}
-                  </span>
-                  {!d.implemented && (
-                    <span className="ml-1 rounded bg-slate-200 px-1.5 text-xs">pending</span>
-                  )}
-                  {d.requires_verification && (
-                    <span className="ml-1 text-xs font-bold text-amber-700">
-                      human verification
-                    </span>
-                  )}
-                </p>
-                <p className="text-xs text-slate-600">
-                  {d.model} · {d.licence}
-                </p>
-                <p className="text-xs text-slate-500">{d.note}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs">
-                  min conf
-                  <input
-                    type="number"
-                    step="0.05"
-                    min="0.05"
-                    max="0.99"
-                    className="ml-1 w-16 rounded border p-1"
-                    defaultValue={d.min_conf ?? ''}
-                    onBlur={(e) =>
-                      e.target.value && void patchDet(d.name, { min_conf: Number(e.target.value) })
-                    }
-                  />
-                </label>
-                <button
-                  className={`rounded px-3 py-1 text-sm font-bold ${d.enabled ? 'bg-green-600 text-white' : 'bg-slate-300'}`}
-                  onClick={() => void patchDet(d.name, { enabled: !d.enabled })}
-                >
-                  {d.enabled ? 'On' : 'Off'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Recent AI events (raw, before incident creation)">

@@ -136,5 +136,6 @@ def dispatch_alert(inc: dict, level: int = 0) -> list[dict]:
 def _secondary(inc: dict) -> str | None:
     from ..domain import SECONDARY_DEPARTMENT
 
-    s = SECONDARY_DEPARTMENT.get(inc["category"])
+    route = db.one('SELECT secondary FROM routing WHERE category=?', (inc['category'],))
+    s = route['secondary'] if route else SECONDARY_DEPARTMENT.get(inc['category'])
     return s if s != inc.get("department") else None

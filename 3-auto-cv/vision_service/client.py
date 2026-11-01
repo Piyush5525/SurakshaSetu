@@ -51,6 +51,12 @@ class BackendClient:
         else:
             self._bg(go)
 
+    def detector_status(self, camera_id: str, statuses: dict[str, str]) -> None:
+        try:
+            self.s.post(f"{self.api}/worker/detector-status", json={"camera_id": camera_id, "statuses": statuses}, headers=self.h, timeout=5)
+        except requests.RequestException:
+            pass
+
     def preview(self, camera_id: str, jpeg: bytes) -> None:
         def go() -> None:
             self.s.post(

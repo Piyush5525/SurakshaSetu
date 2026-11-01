@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TEXT NOT NULL, acknowledged_at TEXT);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS routing (
+  category TEXT PRIMARY KEY, department TEXT NOT NULL, secondary TEXT);
 CREATE TABLE IF NOT EXISTS events_raw (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, camera_id TEXT, model TEXT, cls TEXT, confidence REAL, outcome TEXT);
 """
@@ -91,9 +93,16 @@ def connect() -> Iterator[sqlite3.Connection]:
             c.close()
 
 
+def _add_column(c: sqlite3.Connection, table: str, col: str, ddl: str) -> None:
+    if col not in [r[1] for r in c.execute(f'PRAGMA table_info({table})').fetchall()]:
+        c.execute(f'ALTER TABLE {table} ADD COLUMN {col} {ddl}')
+
+
 def init_db() -> None:
     with connect() as c:
         c.executescript(SCHEMA)
+        _add_column(c, 'cameras', 'config_json', "TEXT NOT NULL DEFAULT '{}'")
+        _add_column(c, 'events_raw', 'detector', 'TEXT')
 
 
 def rows(sql: str, args: tuple | list = ()) -> list[dict[str, Any]]:

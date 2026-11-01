@@ -3,6 +3,7 @@ import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { currentUser, login, logout, type User } from '@common/lib/api';
 import Analytics from './Analytics';
 import Assets from './Assets';
+import CvMonitor from './CvMonitor';
 import Incidents from './Incidents';
 import Live from './Live';
 import MapView from './MapView';
@@ -13,6 +14,7 @@ import { LiveProvider, useGet, useLive } from './hooks';
 const TABS: [string, string, string][] = [
   ['', 'Overview', 'responder'],
   ['live', 'Live monitoring', 'responder'],
+  ['cv', 'Computer vision', 'responder'],
   ['incidents', 'Incidents', 'responder'],
   ['map', 'Factory map', 'responder'],
   ['assets', 'Machines & QR', 'responder'],
@@ -133,6 +135,7 @@ function Shell2({ user, onOut }: { user: User; onOut: () => void }) {
           <Routes>
             <Route index element={<Overview />} />
             <Route path="live" element={<Live />} />
+            <Route path="cv" element={<CvMonitor />} />
             <Route path="incidents" element={<Incidents />} />
             <Route path="incidents/:id" element={<Incidents />} />
             <Route path="map" element={<MapView />} />

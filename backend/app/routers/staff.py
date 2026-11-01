@@ -223,6 +223,40 @@ def responder_available(rid: int, available: bool, user: dict = Depends(require(
     return {"ok": True}
 
 
+class RouteIn(BaseModel):
+    department: str
+    secondary: str | None = None
+
+
+@router.get("/routing")
+def get_routing(_: dict = Depends(require("responder"))) -> list[dict]:
+    from ..domain import DEPARTMENT_BY_CATEGORY, SECONDARY_DEPARTMENT
+
+    over = {r["category"]: r for r in db.rows("SELECT * FROM routing")}
+    return [
+        {
+            "category": c,
+            "label": CATEGORIES[c],
+            "department": over[c]["department"] if c in over else DEPARTMENT_BY_CATEGORY[c],
+            "secondary": over[c]["secondary"] if c in over else SECONDARY_DEPARTMENT.get(c),
+            "customised": c in over,
+        }
+        for c in CATEGORIES
+    ]
+
+
+@router.put("/routing/{category}")
+def put_routing(category: str, body: RouteIn, user: dict = Depends(require("admin"))) -> dict:
+    if category not in CATEGORIES:
+        raise HTTPException(404, "unknown category")
+    for d in (body.department, body.secondary):
+        if d and d not in DEPARTMENTS:
+            raise HTTPException(422, f"unknown department {d}")
+    db.run("INSERT OR REPLACE INTO routing(category,department,secondary) VALUES(?,?,?)", (category, body.department, body.secondary or None))
+    svc.audit(user["u"], "routing.update", category, f"{body.department}/{body.secondary}")
+    return {"ok": True}
+
+
 # ---- Notifications ---------------------------------------------------------------------------------------
 @router.get("/notifications")
 def notifications(limit: int = 200, _: dict = Depends(require("responder"))) -> list[dict]:

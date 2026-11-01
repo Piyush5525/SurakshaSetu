@@ -1,0 +1,397 @@
+[
+ {
+  "model": "fire",
+  "weights": "models/fire_smoke.pt",
+  "task": "detect",
+  "classes": {
+   "0": "Fire",
+   "1": "Smoke"
+  },
+  "load_s": 0.12,
+  "runs": [
+   {
+    "image": "constr_truck.jpg",
+    "ms": 137,
+    "detections": [],
+    "n": 0
+   },
+   {
+    "image": "fp_frame_0000.jpg",
+    "ms": 37,
+    "detections": [],
+    "n": 0
+   },
+   {
+    "image": "fp_frame_0030.jpg",
+    "ms": 40,
+    "detections": [],
+    "n": 0
+   }
+  ]
+ },
+ {
+  "model": "forklift",
+  "weights": "models/third_party/forklift/best.pt",
+  "task": "detect",
+  "classes": {
+   "0": "forklift",
+   "1": "person"
+  },
+  "load_s": 0.06,
+  "runs": [
+   {
+    "image": "fp_frame_0000.jpg",
+    "ms": 33,
+    "detections": [
+     [
+      "forklift",
+      0.92
+     ],
+     [
+      "person",
+      0.84
+     ],
+     [
+      "person",
+      0.76
+     ]
+    ],
+    "n": 3
+   },
+   {
+    "image": "fp_frame_0030.jpg",
+    "ms": 36,
+    "detections": [
+     [
+      "forklift",
+      0.97
+     ],
+     [
+      "person",
+      0.61
+     ]
+    ],
+    "n": 2
+   }
+  ]
+ },
+ {
+  "model": "leak",
+  "weights": "models/third_party/leak/best.pt",
+  "task": "detect",
+  "classes": {
+   "0": "crack",
+   "1": "gas",
+   "2": "leak",
+   "3": "no leak",
+   "4": "water"
+  },
+  "load_s": 0.06,
+  "runs": [
+   {
+    "image": "constr_truck.jpg",
+    "ms": 37,
+    "detections": [],
+    "n": 0
+   },
+   {
+    "image": "fp_frame_0000.jpg",
+    "ms": 38,
+    "detections": [
+     [
+      "no leak",
+      0.25
+     ]
+    ],
+    "n": 1
+   },
+   {
+    "image": "fp_frame_0030.jpg",
+    "ms": 36,
+    "detections": [
+     [
+      "no leak",
+      0.42
+     ]
+    ],
+    "n": 1
+   }
+  ]
+ },
+ {
+  "model": "liquid-seg",
+  "weights": "models/third_party/liquid/best.pt",
+  "task": "segment",
+  "classes": {
+   "0": "bottle",
+   "1": "glass",
+   "2": "liquid",
+   "3": "wine-glass"
+  },
+  "load_s": 0.06,
+  "runs": [
+   {
+    "image": "constr_truck.jpg",
+    "ms": 48,
+    "detections": [],
+    "n": 0
+   },
+   {
+    "image": "fp_frame_0000.jpg",
+    "ms": 48,
+    "detections": [
+     [
+      "liquid",
+      0.28
+     ],
+     [
+      "liquid",
+      0.28
+     ]
+    ],
+    "n": 2
+   },
+   {
+    "image": "fp_frame_0030.jpg",
+    "ms": 45,
+    "detections": [
+     [
+      "liquid",
+      0.78
+     ],
+     [
+      "liquid",
+      0.55
+     ],
+     [
+      "liquid",
+      0.45
+     ],
+     [
+      "bottle",
+      0.4
+     ]
+    ],
+    "n": 4
+   }
+  ]
+ },
+ {
+  "model": "package",
+  "weights": "models/third_party/package/best.pt",
+  "task": "detect",
+  "classes": {
+   "0": "dent",
+   "1": "dirt",
+   "2": "hole"
+  },
+  "load_s": 0.04,
+  "runs": [
+   {
+    "image": "pkg_01.png",
+    "ms": 34,
+    "detections": [
+     [
+      "hole",
+      0.44
+     ],
+     [
+      "dent",
+      0.3
+     ]
+    ],
+    "n": 2
+   },
+   {
+    "image": "pkg_02.png",
+    "ms": 34,
+    "detections": [
+     [
+      "hole",
+      0.62
+     ],
+     [
+      "dent",
+      0.33
+     ],
+     [
+      "dent",
+      0.27
+     ]
+    ],
+    "n": 3
+   },
+   {
+    "image": "pkg_03.png",
+    "ms": 28,
+    "detections": [
+     [
+      "dent",
+      0.49
+     ],
+     [
+      "dent",
+      0.37
+     ]
+    ],
+    "n": 2
+   }
+  ]
+ },
+ {
+  "model": "sdg-box (stage 1)",
+  "weights": "models/third_party/sdg_v2_HN_yolo1/best.pt",
+  "task": "detect",
+  "classes": {
+   "0": "The_Box"
+  },
+  "load_s": 0.04,
+  "runs": [
+   {
+    "image": "fp_frame_0000.jpg",
+    "ms": 32,
+    "detections": [
+     [
+      "The_Box",
+      0.45
+     ]
+    ],
+    "n": 1
+   },
+   {
+    "image": "fp_frame_0030.jpg",
+    "ms": 32,
+    "detections": [
+     [
+      "The_Box",
+      0.32
+     ]
+    ],
+    "n": 1
+   },
+   {
+    "image": "pkg_01.png",
+    "ms": 44,
+    "detections": [
+     [
+      "The_Box",
+      0.38
+     ]
+    ],
+    "n": 1
+   },
+   {
+    "image": "pkg_02.png",
+    "ms": 44,
+    "detections": [
+     [
+      "The_Box",
+      0.66
+     ]
+    ],
+    "n": 1
+   },
+   {
+    "image": "pkg_03.png",
+    "ms": 35,
+    "detections": [],
+    "n": 0
+   }
+  ]
+ },
+ {
+  "model": "sdg-defect (stage 2)",
+  "weights": "models/third_party/sdg_hybrid_v2_yolo2/best.pt",
+  "task": "detect",
+  "classes": {
+   "0": "Stain",
+   "1": "Puncture"
+  },
+  "load_s": 0.04,
+  "runs": [
+   {
+    "image": "pkg_01.png",
+    "ms": 45,
+    "detections": [
+     [
+      "Stain",
+      0.68
+     ],
+     [
+      "Puncture",
+      0.52
+     ]
+    ],
+    "n": 2
+   },
+   {
+    "image": "pkg_02.png",
+    "ms": 43,
+    "detections": [
+     [
+      "Stain",
+      0.63
+     ],
+     [
+      "Puncture",
+      0.51
+     ]
+    ],
+    "n": 2
+   },
+   {
+    "image": "pkg_03.png",
+    "ms": 35,
+    "detections": [],
+    "n": 0
+   }
+  ]
+ },
+ {
+  "model": "waste",
+  "weights": "models/third_party/waste/best.pt",
+  "task": "detect",
+  "classes": {
+   "0": "aluminumCan_awss",
+   "1": "aluminumFoil_awss",
+   "2": "apple_awss",
+   "3": "banana_awss",
+   "4": "battery_awss",
+   "5": "bolt_awss",
+   "6": "bottle_awss",
+   "7": "cigarette_awss",
+   "8": "egg_awss",
+   "9": "foodContainer_awss",
+   "10": "juiceBox_awss",
+   "11": "leaf_awss",
+   "12": "nut_awss",
+   "13": "orange_awss",
+   "14": "paperBag_awss",
+   "15": "paperCup_awss",
+   "16": "paper_awss",
+   "17": "plasticFoodPacket_awss",
+   "18": "plasticPacket_awss"
+  },
+  "load_s": 0.05,
+  "runs": [
+   {
+    "image": "constr_truck.jpg",
+    "ms": 37,
+    "detections": [],
+    "n": 0
+   },
+   {
+    "image": "fp_frame_0000.jpg",
+    "ms": 38,
+    "detections": [],
+    "n": 0
+   },
+   {
+    "image": "fp_frame_0030.jpg",
+    "ms": 36,
+    "detections": [],
+    "n": 0
+   }
+  ]
+ }
+]

@@ -30,6 +30,8 @@ class Zone:
     polygon: list[Point]
     location_id: str = "unknown"
     forklift_only: bool = False  # forklift_lane zones: pedestrians must not enter (Phase 2 rule)
+    allowed: list[str] = field(default_factory=list)  # waste_bin zones: waste groups that belong here
+    capacity: int | None = None  # waste_bin zones: more items than this = overflowing
 
 
 @dataclass

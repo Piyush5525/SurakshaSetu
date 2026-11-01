@@ -60,6 +60,7 @@ SECONDARY_DEPARTMENT = {
     "storage_handling": "EHS",
     "warehouse_accident": "EHS",
     "waste_disposal": "EHS",
+    "logistics": "Quality Assurance",
 }
 DEPARTMENTS = sorted(set(DEPARTMENT_BY_CATEGORY.values()) | set(SECONDARY_DEPARTMENT.values()))
 

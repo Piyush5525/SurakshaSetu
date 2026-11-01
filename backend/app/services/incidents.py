@@ -64,20 +64,31 @@ def create_incident(
     if src_row:
         loc = {k: src_row.get(k) for k in loc}
         risk = float(src_row.get("risk_weight") or 1.0)
-    if asset_id and not src_row:
+    if asset_id:  # the linked machine's risk weight applies even when a camera raised the incident
         a = db.one("SELECT * FROM assets WHERE id=?", (asset_id,))
         if a:
-            loc = {k: a.get(k) for k in loc}
+            if not src_row:
+                loc = {k: a.get(k) for k in loc}
             risk = float(a.get("risk_weight") or 1.0)
     t = triage(category=category, text=description, serious_harm=serious_harm, injury_now=injury_now, risk_weight=risk, source=source)
     sev = t["severity"]
     reasons = list(t["reasons"])
+    meta = (ai or {}).get("meta") or {}
+    if meta.get("level") == "CRITICAL":
+        sev = min(5, sev + 1)
+        reasons.append('+1 forklift-pedestrian level CRITICAL (distance and closing speed)')
+    if meta.get("hazardous"):
+        sev = min(5, sev + 1)
+        reasons.append('+1 hazardous waste item (for example a battery) in the wrong place')
     if severity_override:
         sev = max(1, min(5, int(severity_override)))
         reasons.append(f"Severity set to {sev} by {created_by or 'staff'}")
     iid = new_incident_id()
     ts = now_iso()
     dept = t["department"]
+    route = db.one('SELECT * FROM routing WHERE category=?', (category,))
+    if route:
+        dept = route['department']
     track = secrets.token_urlsafe(9)
     db.run(
         """INSERT INTO incidents(id,category,description,source,hazard_type,asset_id,camera_id,audio_id,site,building,floor,zone,

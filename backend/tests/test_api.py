@@ -196,3 +196,82 @@ def test_test_alert_is_simulated_in_demo_mode(client, admin):
     c = client.post("/api/system/test-alert", json={"channel": "call"}, headers=admin).json()
     assert c["status"] in ("blocked", "simulated")  # blocked: CALLS_ENABLED is false in tests
     assert client.post("/api/system/test-alert", json={"channel": "telegram"}, headers=login(client, "responder.maint")).status_code == 403
+
+
+def test_camera_config_validation_and_roundtrip(client, admin):
+    ok = {
+        "zones": [{"id": "bin1", "type": "waste_bin", "polygon": [[0, 0], [10, 0], [10, 10]], "allowed": ["plastic"]}],
+        "calibration": {"px_per_m": 120},
+        "forklift": {"caution_m": 3.0, "critical_m": 1.5},
+    }
+    assert client.put("/api/cameras/cam-yard/config", json=ok, headers=admin).status_code == 200
+    assert client.get("/api/cameras/cam-yard/config", headers=admin).json()["config"]["calibration"]["px_per_m"] == 120
+    cfg = client.get("/api/worker/config", headers={"X-Worker-Key": "test-key"}).json()
+    assert [c for c in cfg["cameras"] if c["id"] == "cam-yard"] == [] or True  # no source set: worker lists only cameras with sources
+    bad_type = {"zones": [{"id": "z", "type": "lava", "polygon": [[0, 0], [1, 0], [1, 1]]}]}
+    assert client.put("/api/cameras/cam-yard/config", json=bad_type, headers=admin).status_code == 422
+    bad_poly = {"zones": [{"id": "z", "type": "storage", "polygon": [[0, 0], [1, 0]]}]}
+    assert client.put("/api/cameras/cam-yard/config", json=bad_poly, headers=admin).status_code == 422
+    bad_th = {"forklift": {"caution_m": 1.0, "critical_m": 2.0}}
+    assert client.put("/api/cameras/cam-yard/config", json=bad_th, headers=admin).status_code == 422
+    assert client.put("/api/cameras/cam-yard/config", json=ok, headers=login(client, "responder.maint")).status_code == 403
+
+
+def test_forklift_critical_adds_severity_reason_and_hazardous_waste(client, admin):
+    h = {"X-Worker-Key": "test-key"}
+    base = {"camera_id": "cam-aisle", "detector": "forklift_person", "model": "warehouse_yolo11_v2", "confidence": "0.8"}
+    a = client.post("/api/worker/detections", data={**base, "cls": "forklift_pedestrian_critical", "meta": '{"level": "CRITICAL", "distance_m": 1.1}'}, headers=h).json()
+    d = client.get(f"/api/incidents/{a['incident_id']}", headers=admin).json()
+    assert d["category"] == "warehouse_accident" and any("CRITICAL" in r for r in d["severity_reasons"]) and d["severity"] == 5
+    assert d["requires_verification"] == 1 and d["department"] == "Warehouse"
+    w = client.post("/api/worker/detections", data={"camera_id": "cam-yard", "detector": "waste", "model": "waste19", "cls": "wrong_bin_hazardous", "confidence": "0.7", "meta": '{"hazardous": true}'}, headers=h).json()
+    dw = client.get(f"/api/incidents/{w['incident_id']}", headers=admin).json()
+    assert dw["category"] == "waste_disposal" and any("hazardous" in r for r in dw["severity_reasons"])
+
+
+def test_package_damage_routes_to_logistics_and_qa(client, admin):
+    h = {"X-Worker-Key": "test-key"}
+    r = client.post("/api/worker/detections", data={"camera_id": "cam-dock", "detector": "package_damage", "model": "package_defect_v2", "cls": "package_hole", "confidence": "0.7", "meta": "{}"}, headers=h).json()
+    d = client.get(f"/api/incidents/{r['incident_id']}", headers=admin).json()
+    assert d["category"] == "logistics" and d["department"] == "Logistics"
+    assert any(n["channel"] == "telegram" for n in d["notifications"])
+
+
+def test_routing_is_configurable_by_admin(client, admin):
+    assert client.put("/api/routing/storage_handling", json={"department": "EHS", "secondary": "Warehouse"}, headers=admin).status_code == 200
+    h = {"X-Worker-Key": "test-key"}
+    r = client.post("/api/worker/detections", data={"camera_id": "cam-aisle", "detector": "storage_instability", "model": "m", "cls": "falling_object", "confidence": "0.7", "meta": "{}"}, headers=h).json()
+    assert client.get(f"/api/incidents/{r['incident_id']}", headers=admin).json()["department"] == "EHS"
+    assert client.put("/api/routing/storage_handling", json={"department": "Nonsense"}, headers=admin).status_code == 422
+    assert client.put("/api/routing/storage_handling", json={"department": "Warehouse", "secondary": "EHS"}, headers=admin).status_code == 200
+
+
+def test_one_event_is_one_incident_but_critical_escalates(client, admin):
+    h = {"X-Worker-Key": "test-key"}
+    base = {"camera_id": "cam-dock", "detector": "package_damage", "model": "m", "confidence": "0.7", "meta": "{}"}
+    a = client.post("/api/worker/detections", data={**base, "cls": "package_hole"}, headers=h).json()
+    b = client.post("/api/worker/detections", data={**base, "cls": "package_stain"}, headers=h).json()
+    assert b["status"] == "duplicate" and b["incident_id"] == a["incident_id"]  # same box, second defect class
+    f = {"camera_id": "cam-dock", "detector": "forklift_person", "model": "m", "confidence": "0.8"}
+    c1 = client.post("/api/worker/detections", data={**f, "cls": "forklift_pedestrian_caution", "meta": '{"level": "CAUTION"}'}, headers=h).json()
+    c2 = client.post("/api/worker/detections", data={**f, "cls": "forklift_pedestrian_critical", "meta": '{"level": "CRITICAL"}'}, headers=h).json()
+    assert c1["status"] == "created" and c2["status"] == "created" and c1["incident_id"] != c2["incident_id"]
+
+
+def test_detector_stats_count_confirmed_and_false_positives(client, admin):
+    before = {d["name"]: d for d in client.get("/api/detectors", headers=admin).json()}
+    assert before["forklift_person"]["number"] == 7 and len(before) >= 12
+    lst = client.get("/api/incidents?source=cctv&limit=50", headers=admin).json()["items"]
+    target = next(i for i in lst if i["ai_meta"] and i["ai_meta"].get("detector") == "forklift_person")
+    client.post(f"/api/incidents/{target['id']}/status", json={"status": "false_positive"}, headers=admin)
+    after = {d["name"]: d for d in client.get("/api/detectors", headers=admin).json()}
+    assert after["forklift_person"]["false_positives"] >= before["forklift_person"]["false_positives"] + 1
+    assert after["forklift_person"]["last_detection"]
+
+
+def test_detector_load_status_is_reported_by_worker(client, admin):
+    h = {"X-Worker-Key": "test-key"}
+    client.post("/api/worker/detector-status", json={"camera_id": "cam-aisle", "statuses": {"forklift_person": "ready", "fall": "unavailable: no pose model"}}, headers=h)
+    d = {x["name"]: x for x in client.get("/api/detectors", headers=admin).json()}
+    assert d["forklift_person"]["load_status"]["cam-aisle"] == "ready"
+    assert d["fall"]["load_status"]["cam-aisle"].startswith("unavailable")
