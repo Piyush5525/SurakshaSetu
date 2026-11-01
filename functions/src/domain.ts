@@ -33,3 +33,22 @@ export const DEFAULTS = {
 } as const;
 
 export const MIN_GROUP_SIZE = 5;
+
+/** ISO week key like 2026-W44 (UTC). */
+export function isoWeekKey(d: Date): string {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dayNum = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((t.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+/**
+ * Default shift from the local hour. ASSUMPTION: A 06-14, B 14-22, C 22-06. The worker can change it.
+ */
+export function shiftForHour(hour: number): Shift {
+  if (hour >= 6 && hour < 14) return 'A';
+  if (hour >= 14 && hour < 22) return 'B';
+  return 'C';
+}

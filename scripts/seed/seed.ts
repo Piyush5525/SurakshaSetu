@@ -10,6 +10,7 @@ import { projectBoardItem, shouldPublish } from '../../functions/src/board';
 import {
   DEFAULTS,
   HAZARD_TYPES,
+  isoWeekKey,
   type HazardType,
   type ReportStatus,
   type Shift,
@@ -110,15 +111,6 @@ const DAY = 86_400_000;
 const now = Date.now();
 const nowDate = new Date(now);
 const tz = DEFAULTS.plantTimeZone;
-
-function weekKey(d: Date): string {
-  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dayNum = t.getUTCDay() || 7;
-  t.setUTCDate(t.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((t.getTime() - yearStart.getTime()) / DAY + 1) / 7);
-  return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
-}
 
 async function clear(col: string) {
   const snap = await db.collection(col).get();
@@ -236,7 +228,7 @@ async function main() {
           status === 'fixed' ? 'closed' : status === 'being_fixed' ? 'in_progress' : 'open';
         const closedAt =
           status === 'fixed'
-            ? new Date(createdMs + (6 + Math.floor(rnd() * 90)) * 3_600_000)
+            ? new Date(Math.min(now, createdMs + (6 + Math.floor(rnd() * 90)) * 3_600_000))
             : null;
         const publicFixText = status === 'received' ? '' : 'Seed example fix (fictional)';
         const featured = status === 'fixed' && rnd() < 0.1;
@@ -279,7 +271,7 @@ async function main() {
           score: 3 + Math.floor(rnd() * 3),
           locationId: l.id,
           shift,
-          weekKey: weekKey(when),
+          weekKey: isoWeekKey(when),
           createdAt: Timestamp.fromDate(when),
         });
         nFeedback++;
@@ -354,6 +346,12 @@ async function main() {
       value: DEFAULTS.snapshotRetentionDays,
       unit: 'days',
       label: 'Delete pixelated camera snapshots after this many days',
+    },
+    {
+      key: 'simulated_lockout_confirmed_pct',
+      value: 80,
+      unit: '%',
+      label: 'SIMULATED share of jam-clearing events with confirmed lockout (no real sensor)',
     },
     {
       key: 'air_leak_kwh_per_event',

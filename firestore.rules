@@ -52,7 +52,7 @@ service cloud.firestore {
         && d.shift in ['A', 'B', 'C']
         && (!('reporterName' in d) || d.reporterName == null || (d.reporterName is string && d.reporterName.size() <= 60))
         && d.status == 'received'
-        && d.createdAt is timestamp && d.createdAt <= request.time;
+        && d.createdAt is timestamp && d.createdAt <= request.time + duration.value(10, 'm');
     }
 
     // Actions are created by the triage function; staff may edit progress fields only.
@@ -88,7 +88,7 @@ service cloud.firestore {
         && d.locationId is string && d.locationId.size() <= 60
         && d.shift in ['A', 'B', 'C']
         && d.weekKey is string && d.weekKey.matches('^[0-9]{4}-W[0-9]{2}$')
-        && d.createdAt is timestamp && d.createdAt <= request.time;
+        && d.createdAt is timestamp && d.createdAt <= request.time + duration.value(10, 'm');
     }
 
     match /assumptions/{id} {
