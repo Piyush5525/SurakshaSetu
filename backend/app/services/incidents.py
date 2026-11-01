@@ -2,7 +2,7 @@
 
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from .. import db
@@ -14,7 +14,7 @@ ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
 def new_incident_id() -> str:
-    day = datetime.now(timezone.utc).strftime("%Y%m%d")
+    day = datetime.now(UTC).strftime("%Y%m%d")
     for _ in range(20):
         cand = f"INC-{day}-" + "".join(secrets.choice(ID_ALPHABET) for _ in range(4))
         if not db.one("SELECT 1 FROM incidents WHERE id=?", (cand,)):
@@ -148,7 +148,7 @@ def save_evidence(incident_id: str, kind: str, filename: str, data: bytes, mime:
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{eid}{ext}"
     path.write_bytes(data)
-    keep = (datetime.now(timezone.utc) + timedelta(days=settings.EVIDENCE_RETENTION_DAYS)).isoformat(timespec="seconds")
+    keep = (datetime.now(UTC) + timedelta(days=settings.EVIDENCE_RETENTION_DAYS)).isoformat(timespec="seconds")
     db.run(
         "INSERT INTO evidence(id,incident_id,kind,path,mime,size,created_at,retention_until,note) VALUES(?,?,?,?,?,?,?,?,?)",
         (eid, incident_id, kind, str(path.relative_to(settings.EVIDENCE_DIR)), mime, len(data), now_iso(), keep, note),

@@ -1,52 +1,76 @@
-# Safer Work, Better Work: "Scan · Speak · See"
+# Safer Work, Better Work: Scan · Speak · See
 
-Hackathon entry for *Option 01: Safer Work, Better Work*. A near-miss and hazard reporting system for a cosmetics plant: **workers scan a QR sticker, speak or tap, and see what changed**.
-Built around one hero risk (**clearing jams and changeovers on filling/packaging lines**, our assumption, not L'Oréal data) plus forklift–pedestrian conflict.
-Fictional **Demo Plant — Line 3**; no real-company branding, data or endorsement. Everything runs offline on the Firebase emulators (no billing).
+One incident platform for a (fictional) cosmetics plant, **Demo Plant — Line 3**. Three ways in, one central backend, one incident database:
 
-| Part | Where | What |
-|---|---|---|
-| Worker PWA | `2-user-report-site` `/r/:locationId` | QR → icon + voice note + photo, anonymous, EN/HI, offline queue, receipt, 1-tap pulse |
-| Backend | `functions/`, `firestore.rules`, `storage.rules` | rules-tested access, explainable triage (severity + reason, eco-tag), actions, public board projection, simulated escalation |
-| Admin dashboard | `/admin` | inbox with severity reason, actions, KPIs, floor-plan hotspots, camera events, simulated dispatch |
-| Public board | `/board` | "You said, we did", readable from 3 m, no login, no private data |
-| Camera service | `3-auto-cv` | pretrained YOLOv8 + supervision: forklift near miss, hand in danger zone, pixelated snapshots, human confirmation |
-| Docs (graded) | `docs/` | risk analysis, implementation plan, metrics, eco impact, privacy, limitations, demo script |
+| # | Folder | Port | What it is |
+|---|---|---|---|
+| 1 | `1-sticker-app` | 5174 | **QR sticker reporting.** A sticker on each machine opens a one-screen form for _that_ machine (no login, EN/HI, photo/video/voice, offline queue). |
+| 2 | `2-user-report-site` | 5173 | **Worker portal** (report from anywhere, track status, "You said, we did" board) and the **admin control centre** at `/admin` (live monitoring, incidents, map, QR management, alerts, analytics). |
+| 3 | `3-auto-cv` | worker | **Camera/CV worker.** Runs detector plugins on cameras, video files or a webcam and posts confirmed, pixelated events to the backend. |
+| – | `backend` | 8000 | **Central FastAPI backend** (SQLite): incidents, workflow, roles, evidence, Telegram/voice alerts, escalation, analytics, WebSocket. API docs at `/api/docs`. |
 
-## Three products, three folders
-| Folder | What | Start alone |
-|---|---|---|
-| `1-sticker-app` | Print a QR sticker per machine. Scanning opens a one-screen report form for that machine on the worker's phone (http://YOUR-PC-IP:5174). | `npm run dev:sticker` |
-| `2-user-report-site` | Worker site (manual report: pick machine, icon, details, photo, voice), receipt, public "You said, we did" board, staff dashboard with triage reasons and owners. | `npm run dev:site` |
-| `3-auto-cv` | Camera service: YOLOv8 spots a hazard and files a report by itself. | `npm run cv:demo` / `npm run cv:webcam` |
+```
+QR report / worker portal / CCTV detection / audio detection
+   -> backend (one incident table) -> triage (severity + reason) -> department routing
+   -> Telegram (+ voice call) alert -> responder assignment -> acknowledge -> investigate -> resolve -> close
+   -> analytics, public board
+```
 
-Shared: `packages/common` (form, offline queue, language), `functions/` + `firestore.rules` (backend, triage), `scripts/` (seed, tests).
-All three write to the same Firebase emulator, so a report from any of them appears in the dashboard.
+## Run it (Windows, macOS, Linux)
 
-## Run it
-Prerequisites: Node 20+, a free JDK 21 for the Firebase emulators (the start script finds `~/.jdk/jdk-*` or `JAVA_HOME`; otherwise install Temurin 21 from adoptium.net), Python 3.11+ (camera only).
+Prerequisites: Node 20+, Python 3.11+. No Java, no Firebase, no paid services.
+
 ```
 npm install
-npm run dev        # emulators (UI :4000) + user site :5173 + sticker app :5174
-npm run seed       # second terminal, once the emulators are ready: synthetic plant, 8 weeks of reports
+pip install -r backend/requirements.txt        # the start script also does this once if needed
+npm run dev          # API :8000, user site :5173, sticker app :5174  (first start seeds machines + demo logins)
+npm run seed         # optional: 40 synthetic past incidents (flagged SAMPLE data) so analytics have content
 ```
-- Worker site: `http://localhost:5173` (button **Report an incident**). Staff: `/admin` (`supervisor@demo.local` or `ehs@demo.local`, password `demo1234`, emulator only). Board: `/board`.
-- Stickers: `http://localhost:5174` -> Print / Save as PDF. For a phone, the page uses this computer's Wi-Fi address (pick it if several are shown); phone and computer must be on the same Wi-Fi. Camera/microphone access on a phone needs HTTPS, so over plain http the voice button may be refused; the photo button and the typed details box still work.
-- Camera: `npm run cv:demo` (test clip, reports appear by themselves) or `npm run cv:webcam` (laptop webcam; hand in the red zone). Add review with `npm run cv:webcam:review` (events wait for a supervisor to confirm; recommended for real use).
+
+- Worker portal: <http://localhost:5173> · Sticker app: <http://localhost:5174> · Public board: `/board` · API docs: <http://localhost:8000/api/docs>
+- Control centre: <http://localhost:5173/admin>. Demo accounts (local only): `admin`, `manager.ehs`, `responder.maint`, password `demo1234`.
+- **Phones:** put phone and PC on the same Wi-Fi. In **Admin → Machines & QR** set the address to your PC's Wi-Fi IP (it suggests one), then download the sticker PDF. Phones cannot open `localhost`.
+  Browsers only allow the microphone over HTTPS, so on plain `http://` the voice button may be refused; photo, video and typed details still work.
+
+## Camera / CV worker
+
+```
+pip install -r 3-auto-cv/requirements.txt
+cd 3-auto-cv
+python -m vision_service.worker --source cam-store=../demo-assets/fire.mp4 --detectors fire --loop --realtime   # video file
+python -m vision_service.worker --source cam-line3=0                                                           # laptop webcam
+python -m vision_service.worker                                                                                # every camera registered in the dashboard
+```
+
+Detectors (see **Admin → Live monitoring**, where each can be switched off and its confidence set):
+
+| Detector                                 | Method                                                          | Maturity                                                                              |
+| ---------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `fire` (fire + smoke)                    | your trained `best_nano_111.pt` (classes verified: Fire, Smoke) | **trained**; seen working on `fire.mp4`                                               |
+| `fall`                                   | pose rules (ported from your repo)                              | heuristic; no real fall clip available to test, accuracy unknown                      |
+| `violence`                               | pose gate + CLIP (ported)                                       | heuristic; **missed** the one fight clip available; always needs human verification   |
+| `forklift_person`, `hand_in_zone`        | YOLOv8 + geometry rules inside configured zones                 | rules; machine-running signal is simulated                                            |
+| `ppe`, `spill`, `blocked_aisle`, `waste` | YOLO-World zero-shot                                            | experimental, zone-gated, no measured accuracy                                       |
+| audio (alarm, scream, glass, impact)     | none connected                                                  | **simulated only**, labelled                                                          |
+
+Categories without a reliable detector stay manual-report only (production quality, lab contamination, logistics) and are marked "AI pending". Ordinary CCTV cannot identify a spill's chemical or confirm product or lab contamination.
+
+## Alerts (Telegram and voice call)
+
+Everything is **simulated** until you set `DEMO_MODE=false` in `.env` (see `.env.example`). The dashboard banner always shows the current mode, and **Admin → Notifications → Send test telegram / call** sends one labelled test message. Voice calls need `CALLS_ENABLED=true`, go only to `ALERT_PHONE_NUMBER` / `CALL_ALLOWLIST`, and **never** to emergency-service numbers (100, 101, 102, 108, 112, 911…): we do not integrate with police or ambulance services.
 
 ## Verify
-```
-npm run lint && npm run typecheck && npm test      # 62 unit tests (triage, board, KPI, escalation, retention, pulse)
-npm run test:rules                                  # 23 security-rules tests (stop `npm run dev` first: same ports)
-npm run smoke                                       # with dev + seed running: Cloud Function triggers end to end
-python scripts/e2e/ui_flow.py [screenshot_dir]      # Playwright + Chrome: worker -> inbox -> board -> camera -> dispatch
-cd 3-auto-cv && python -m pytest && ruff check .   # 19 vision tests (no model needed)
-```
-Lighthouse (mobile, `/r/filler`, production build): accessibility 100, best practices 100 (PWA category no longer exists in Lighthouse 12; the app has a manifest, icons and an app-shell service worker).
 
-## Notes
-- Cloud Functions in production need a paid Firebase plan (Blaze); the demo is emulator-only. `.env` is gitignored; `.env.example` lists the optional variables.
-- Optional LLM triage (`TRIAGE_LLM`) is **not built**; rules-based triage is the only path and is fully explainable. No LLM key was available.
-- Honest limitations are in `docs/limitations.md`: no real plant footage, no measured accuracy, simulated dispatch, machine signal, lockout KPI and savings.
-- Licences: Ultralytics YOLO is AGPL-3.0 (fine for the demo). SH17 (CC BY-NC-SA) is not used. The Hugging Face forklift model declares no licence and is not used.
-- Docs: [PLAN.md](PLAN.md) · [docs/MASTER_PROMPT.md](docs/MASTER_PROMPT.md) · [docs/CONTEXT.md](docs/CONTEXT.md) · [docs/data-model.md](docs/data-model.md)
+```
+npm run lint && npm run typecheck          # web apps
+npm test                                   # web unit tests + 21 backend tests
+cd 3-auto-cv && python -m pytest && ruff check .     # 24 vision tests
+npm run dev  (one terminal)   then   npm run e2e     # Playwright + Chrome: QR, portal, offline, live dashboard, workflow, board, CV post
+```
+
+## Docs
+
+[docs/architecture.md](docs/architecture.md) · [docs/limitations.md](docs/limitations.md) · [docs/privacy-and-ethics.md](docs/privacy-and-ethics.md) · [docs/integration-audit.md](docs/integration-audit.md) · [docs/demo-script.md](docs/demo-script.md) · [PLAN.md](PLAN.md)
+
+The first Firebase-emulator backend is archived in `legacy-firebase/`.
+Licences: Ultralytics YOLO / YOLO-World is AGPL-3.0 (fine for a demo; production needs an enterprise licence or a permissive detector). OpenAI CLIP is MIT. Your fire weights and the source repo's demo clips have no licence on record and are kept out of git.

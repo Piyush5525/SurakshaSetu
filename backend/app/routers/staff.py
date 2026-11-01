@@ -1,6 +1,6 @@
 """Staff-only: incident list/detail/workflow, evidence viewing, responders, notifications, analytics, map."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -247,6 +247,22 @@ def system_status(_: dict = Depends(require("responder"))) -> dict:
     }
 
 
+class TestAlert(BaseModel):
+    channel: str = "telegram"  # telegram | call
+
+
+@router.post("/system/test-alert")
+def test_alert(body: TestAlert, user: dict = Depends(require("admin"))) -> dict:
+    """One clearly labelled test message. Respects DEMO_MODE: simulated unless the operator turned it off."""
+    text = f"TEST ALERT from the control centre ({user['u']}). No incident. {now_iso()}"
+    if body.channel == "call":
+        res = notify.place_call("TEST", text, None)
+    else:
+        res = notify.send_telegram("TEST", text, None)
+    svc.audit(user["u"], "system.test_alert", body.channel, res["status"])
+    return res
+
+
 # ---- Analytics + map -------------------------------------------------------------------------------------
 def _mins(a: str | None, b: str | None) -> float | None:
     if not a or not b:
@@ -257,7 +273,7 @@ def _mins(a: str | None, b: str | None) -> float | None:
 @router.get("/analytics")
 def analytics(days: int = 30, user: dict = Depends(require("responder"))) -> dict:
     where, args = _visible(user)
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+    since = (datetime.now(UTC) - timedelta(days=days)).isoformat(timespec="seconds")
     base = f"{where} AND created_at>=?"
     a = [*args, since]
     allrows = db.rows(f"SELECT * FROM incidents WHERE {base}", a)

@@ -6,7 +6,7 @@ Run:  python -m backend.app.seed   (from the repo root)  or let the server call 
 
 import os
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from . import db
 from .domain import now_iso
@@ -91,7 +91,7 @@ def seed_samples(n: int = 40) -> int:
             category=cat, description=text, source=rnd.choice(["qr", "portal", "qr"]), asset_id=aid, serious_harm=harm,
             simulated=True, notify_now=False,
         )
-        ts = (datetime.now(timezone.utc) - timedelta(days=rnd.randint(0, 28), hours=rnd.randint(0, 20))).isoformat(timespec="seconds")
+        ts = (datetime.now(UTC) - timedelta(days=rnd.randint(0, 28), hours=rnd.randint(0, 20))).isoformat(timespec="seconds")
         status = rnd.choice(["resolved", "closed", "resolved", "in_progress", "acknowledged", "alerted"])
         ack = (datetime.fromisoformat(ts) + timedelta(minutes=rnd.randint(2, 40))).isoformat(timespec="seconds")
         res = (datetime.fromisoformat(ack) + timedelta(hours=rnd.randint(1, 48))).isoformat(timespec="seconds")

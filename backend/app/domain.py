@@ -5,7 +5,7 @@ assessment later), never from model confidence alone. All weights are judgement 
 """
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 CATEGORIES = {
     "machinery_accident": "Machinery accidents",
@@ -105,7 +105,7 @@ def can_move(cur: str, new: str) -> bool:
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 # --- Triage -----------------------------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import yaml
 
 from .rules import Zone
 
-VALID_TYPES = {"forklift_lane", "machine_danger", "ppe_required"}
+VALID_TYPES = {"forklift_lane", "machine_danger", "ppe_required", "no_waste"}
 
 
 def load_zones(path: str | Path) -> list[Zone]:

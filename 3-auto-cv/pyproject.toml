@@ -1,4 +1,5 @@
 [tool.ruff]
+extend-exclude = ["vision_service/actions"]  # vendored from the Detection-Models repo, kept as-is
 line-length = 110
 target-version = "py311"
 

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from .. import db
 from ..config import settings
 from ..detectors_catalog import BY_NAME, DETECTORS
-from ..domain import CATEGORIES, now_iso
+from ..domain import now_iso
 from ..security import classify_upload, require, sign_evidence, verify_evidence_sig, worker_key
 from ..services import incidents as svc
 from ..services import realtime
@@ -209,7 +209,7 @@ async def worker_detection(
         ai={"model": model, "version": version, "cls": cls, "confidence": round(confidence, 3), "meta": {**meta_obj, "detector": detector, "maturity": d["maturity"]}},
         requires_verification=bool(d["requires_verification"]), simulated=simulated, notify_now=False,
     )
-    for up, nm in ((frame, "best_frame.jpg"), (clip, "clip.mp4")):
+    for up, nm in ((frame, "best_frame.jpg"), (clip, "clip.webm")):
         if up:
             data = await up.read()
             k = classify_upload(up.filename or nm, up.content_type or "", len(data))

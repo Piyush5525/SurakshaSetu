@@ -188,3 +188,11 @@ def test_board_has_no_private_data(client):
     for b in client.get("/api/public/board").json():
         assert set(b) == {"id", "category", "fix_text", "resolved_at", "location", "location_hi"}
     assert db.one("SELECT 1")
+
+
+def test_test_alert_is_simulated_in_demo_mode(client, admin):
+    r = client.post("/api/system/test-alert", json={"channel": "telegram"}, headers=admin).json()
+    assert r["status"] == "simulated"
+    c = client.post("/api/system/test-alert", json={"channel": "call"}, headers=admin).json()
+    assert c["status"] in ("blocked", "simulated")  # blocked: CALLS_ENABLED is false in tests
+    assert client.post("/api/system/test-alert", json={"channel": "telegram"}, headers=login(client, "responder.maint")).status_code == 403

@@ -1,0 +1,5 @@
+zones:
+  - id: yard-no-waste-1
+    type: no_waste
+    location_id: waste_yard
+    polygon: [[0, 200], [640, 200], [640, 480], [0, 480]]

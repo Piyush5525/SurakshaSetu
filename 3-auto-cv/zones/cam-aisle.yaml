@@ -1,0 +1,8 @@
+# Forklift aisle camera: pedestrians must not enter the forklift-only lane; boxes must not block it.
+# Coordinates are in the camera's pixels; replace with a polygon drawn on your own footage.
+zones:
+  - id: aisle-lane-1
+    type: forklift_lane
+    location_id: forklift_aisle
+    forklift_only: true
+    polygon: [[100, 150], [540, 150], [620, 350], [20, 350]]

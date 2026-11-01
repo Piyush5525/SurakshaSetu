@@ -1,0 +1,10 @@
+# Webcam / Line 3 demo zones (640x480 frame). Edit with: python -m vision_service.draw_zones --source 0
+zones:
+  - id: line3-danger-1
+    type: machine_danger
+    location_id: filler
+    polygon: [[360, 200], [620, 200], [620, 460], [360, 460]]
+  - id: line3-ppe-1
+    type: ppe_required
+    location_id: filler
+    polygon: [[0, 0], [640, 0], [640, 480], [0, 480]]

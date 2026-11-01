@@ -3,7 +3,7 @@
 import logging
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from . import db
 from .config import settings
@@ -18,7 +18,7 @@ _stop = threading.Event()
 def escalate_once() -> list[str]:
     """Critical incidents nobody acknowledged within ESCALATE_AFTER_S get one escalation (managers + call)."""
     done = []
-    now = datetime.now(timezone.utc).timestamp()
+    now = datetime.now(UTC).timestamp()
     for r in db.rows("SELECT * FROM incidents WHERE severity>=4 AND status IN ('reported','analysed','alerted')"):
         age = now - datetime.fromisoformat(r["created_at"]).timestamp()
         if age < settings.ESCALATE_AFTER_S:

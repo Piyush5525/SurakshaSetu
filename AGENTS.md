@@ -8,27 +8,20 @@ Standing rules for every session. Keep this file under 12,000 characters. Detail
 If they conflict with this file, tell the user before proceeding.
 
 ## What this project is
-A near-miss and hazard reporting system for a cosmetics manufacturing plant: **Scan · Speak · See**.
-- Worker PWA opened by QR stickers (icon + voice note + photo, under 30 s, anonymous by default).
-- Firebase backend with explainable triage (severity 1-5 with a reason, plus an eco-tag).
-- Admin dashboard, plus a public "You said, we did" board that closes the loop.
-- AI camera service (pretrained YOLOv8 + supervision zones, no training) that posts auto-detected events needing human confirmation.
-- Later (Phase 2): offline queue, simulated emergency escalation router.
-- Vision only (do NOT build): Bluetooth mesh relay. Write a roadmap doc instead.
-
+A near-miss and incident reporting and response platform for a cosmetics plant: **Scan · Speak · See**. Three user-facing products, one FastAPI backend, one incident database (the owner chose FastAPI over Firebase; the Firebase version is archived in `legacy-firebase/`).
+- `1-sticker-app` (:5174): QR sticker per machine, opens a quick report form (EN/HI, photo/video/voice, offline queue, anonymous).
+- `2-user-report-site` (:5173): worker portal (report, track status, public "You said, we did" board) + admin control centre `/admin` (live monitoring, incidents, workflow, map, QR/asset management, alerts, analytics).
+- `3-auto-cv`: Python worker with detector plugins (fire/smoke trained weights; fall, violence heuristics; forklift/hand rules; YOLO-World zero-shot PPE/spill/aisle/waste); N-of-M confirmation, pixelated evidence, posts to the backend. No training.
+- `backend` (:8000): FastAPI + SQLite, JWT roles, evidence, Telegram + OmniDimension call alerts (simulated unless `DEMO_MODE=false`), escalation, analytics, WebSocket.
+- `packages/common`: shared React code (report form, offline queue, i18n). Vision only (do NOT build): Bluetooth mesh relay (roadmap doc).
 Hero risk: clearing jams and changeovers on filling/packaging lines (our assumption, not L'Oréal data). Secondary: forklift-pedestrian conflict.
-
-Deliverables are graded too: `docs/risk-analysis.md`, `docs/implementation-plan.md`, `docs/metrics.md`, `docs/eco-impact.md`, `docs/privacy-and-ethics.md`, `docs/limitations.md`, `docs/demo-script.md`. Keep them matching the real implementation.
+Deliverables are graded too: `docs/risk-analysis.md`, `implementation-plan.md`, `metrics.md`, `eco-impact.md`, `privacy-and-ethics.md`, `limitations.md`, `demo-script.md`, `architecture.md`. Keep them matching the real implementation.
 
 ## Stack and layout
-- `2-user-report-site` React + Vite + TypeScript PWA (Tailwind, react-i18next; English + Hindi).
-- `functions/` Firebase Cloud Functions (TypeScript). Firestore, Storage, Auth.
-- `3-auto-cv/` Python 3.11: ultralytics (yolov8n, yolov8n-pose), supervision, OpenCV, firebase-admin.
-- `docs/`, `scripts/seed`, `firebase.json`.
-- Develop and demo on the **Firebase Emulator Suite** (offline, no billing). Provide `.env.example`; never commit secrets.
-- Strict TypeScript, Prettier/ESLint; Python with ruff. Few dependencies, boring idiomatic code.
-- Run commands (need Java 21+ on PATH for the emulators): `npm install`; `npm run dev` (emulators + web; UI :4000, web :5173); `npm run seed` (second terminal, emulators up); `npm run lint | typecheck | test | build | format`; `npm run test:rules` (rules tests, starts emulators); `npm run smoke` (E2E trigger check, needs dev + seed running). Vision: `cd 3-auto-cv && python -m vision_service --source <video> --zones zones.yaml` (see its README); `python -m pytest`; `ruff check .`. Browser E2E: `python scripts/e2e/ui_flow.py` (Playwright + Chrome).
-- Repo conventions: project id `demo-plant-line3`; `.env` is gitignored, never read or commit it; LF line endings (`.gitattributes`).
+- Web: React + Vite + TypeScript (Tailwind, react-i18next; English + Hindi). Backend: Python 3.11+ FastAPI, SQLite. CV: ultralytics, supervision, OpenCV, CLIP.
+- Strict TypeScript, Prettier/ESLint; Python with ruff and pytest. Few dependencies, boring idiomatic code. No paid services.
+- Commands: `npm install`; `npm run dev` (API + both web apps); `npm run seed`; `npm run lint | typecheck | test | build | format`; `npm run e2e` (Playwright + Chrome, needs `npm run dev`); `python -m pytest backend/tests`; CV: `cd 3-auto-cv && python -m vision_service.worker --source CAM=VIDEO` and `python -m pytest`, `ruff check .`.
+- Conventions: `.env` is gitignored, never read or commit it (use `.env.example`); LF line endings; runtime data in `backend/data/` is gitignored; `demo-assets/*.mp4` and `*.pt` are gitignored.
 
 ## Hard rules
 - **Privacy:** anonymous reports by default; never store faces; pixelate people in any saved image; no per-person scoring, ranking or leaderboards; aggregate by zone and shift.

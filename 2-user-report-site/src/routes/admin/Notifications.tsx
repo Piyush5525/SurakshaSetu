@@ -39,9 +39,31 @@ export default function Notifications() {
   const rs = useGet<R[]>('/responders');
   const [f, setF] = useState({ name: '', department: 'EHS', telegram_chat_id: '' });
   const [msg, setMsg] = useState('');
+  const [testMsg, setTestMsg] = useState('');
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card title="Alert history (Telegram + voice call)">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {(['telegram', 'call'] as const).map((ch) => (
+            <button
+              key={ch}
+              className="rounded border px-3 py-1 text-sm font-bold"
+              onClick={() =>
+                void api<{ status: string; reason?: string }>('/system/test-alert', {
+                  json: { channel: ch },
+                })
+                  .then((r) =>
+                    setTestMsg(`Test ${ch}: ${r.status}${r.reason ? ` (${r.reason})` : ''}`),
+                  )
+                  .then(() => ns.reload())
+                  .catch((x: unknown) => setTestMsg(x instanceof Error ? x.message : 'Failed'))
+              }
+            >
+              Send test {ch}
+            </button>
+          ))}
+          {testMsg && <span className="text-sm font-bold">{testMsg}</span>}
+        </div>
         <p className="mb-2 text-sm text-slate-600">
           “simulated” means DEMO_MODE logged the message but nothing was sent. Calls only ever go to
           the configured on-call number, never to emergency services.

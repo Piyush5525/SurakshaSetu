@@ -19,6 +19,16 @@ PIXEL_SIZE = 24
 MAX_WIDTH = 640
 
 
+def pixelate(frame: np.ndarray, person_boxes: Sequence[Box]) -> np.ndarray:
+    """Return a copy of `frame` with every person box pixelated (boxes are expanded 15%)."""
+    h, w = frame.shape[:2]
+    img = frame.copy()
+    if person_boxes:
+        xyxy = np.array([expand(b, 0.15, w, h) for b in person_boxes], dtype=float)
+        img = sv.PixelateAnnotator(pixel_size=PIXEL_SIZE).annotate(scene=img, detections=sv.Detections(xyxy=xyxy))
+    return img
+
+
 def pixelated_jpeg(
     frame: np.ndarray,
     person_boxes: Sequence[Box],
